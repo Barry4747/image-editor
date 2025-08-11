@@ -1,0 +1,39 @@
+services:
+  backend:
+    build: ../backend
+    container_name: ai_editor_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app
+      - ../data/media:/data/media
+    env_file:
+      - ../.env
+    depends_on:
+      - redis
+
+  model_service:
+    build: ../model_service
+    container_name: ai_editor_model_service
+    ports:
+      - "8001:8001"
+    volumes:
+      - ../model_service:/app
+    env_file:
+      - ../.env
+
+  redis:
+    image: redis:7
+    container_name: ai_editor_redis
+    ports:
+      - "6379:6379"
+
+  frontend:
+    build: ../frontend
+    container_name: ai_editor_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../frontend:/app
+    env_file:
+      - ../.env

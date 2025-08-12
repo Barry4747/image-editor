@@ -8,6 +8,7 @@
     ],
     "allowJs": true,
     "skipLibCheck": true,
+    "types": ["konva"],
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,

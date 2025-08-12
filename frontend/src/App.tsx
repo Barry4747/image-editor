@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import UploadPage from './pages/UploadPage';
+import EditorPage from './pages/EditorPage';
 
-function App() {
-  const [status, setStatus] = useState("loading");
-
-  useEffect(() => {
-    fetch("http://localhost:8000/health/")
-      .then(res => res.json())
-      .then(data => setStatus(data.status));
-  }, []);
-
-  return <div>Backend status: {status}</div>;
-}
+const App = () => {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<UploadPage />} />
+        <Route path="/editor" element={<EditorPage />} />
+      </Routes>
+    </Router>
+  );
+};
 
 export default App;

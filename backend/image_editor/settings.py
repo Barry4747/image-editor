@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
+    'core',
 ]
 
 MIDDLEWARE = [
@@ -133,3 +134,10 @@ MEDIA_ROOT = '/data/media'
 MEDIA_URL = '/media/'
 
 CORS_ALLOW_ALL_ORIGINS = True 
+
+IN_DOCKER = False
+
+REDIS_HOST = "redis" if IN_DOCKER else "localhost"
+
+CELERY_BROKER_URL = f"redis://{REDIS_HOST}:6379/0"
+CELERY_RESULT_BACKEND = f"redis://{REDIS_HOST}:6379/0"

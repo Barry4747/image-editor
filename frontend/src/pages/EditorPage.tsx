@@ -25,39 +25,44 @@ const EditorPage = () => {
   }, [state, navigate]);
 
   const handleSubmit = async () => {
-  if (!maskData || !prompt.trim()) {
-    alert('Please create a mask and enter a prompt');
+  if (!maskData || !prompt.trim() || !baseImage) {
+    alert('Please create a mask, enter a prompt, and ensure image is loaded');
     return;
   }
 
   try {
-    // Zamiana dataURL na Blob
-    const blob = await (await fetch(maskData)).blob();
-    const file = new File([blob], 'mask.png', { type: 'image/png' });
+    // Zamiana maski z dataURL na Blob
+    const maskBlob = await (await fetch(maskData)).blob();
+    const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
+
+    // Zamiana baseImage.src na Blob
+    const imgResponse = await fetch(baseImage.src);
+    const imgBlob = await imgResponse.blob();
+    const imageFile = new File([imgBlob], 'image.png', { type: imgBlob.type });
 
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('session_id', "dummy-session-1"); // zakładam, że masz gdzieś sessionId
+    formData.append('image', imageFile);
+    formData.append('mask', maskFile);
+    formData.append('prompt', prompt);
 
-    const response = await fetch('/temp-mask/', {
+    const response = await fetch('/jobs', {
       method: 'POST',
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error('Failed to upload mask');
+      throw new Error('Failed to create job');
     }
 
     const data = await response.json();
-    console.log('Uploaded mask URL:', data.file_url);
+    console.log('Job created:', data);
 
-    // Tutaj możesz wysłać prompt i file_url do dalszego przetwarzania
+    alert(`Job created! ID: ${data.job_id}`);
   } catch (err) {
     console.error(err);
-    alert('Error uploading mask');
+    alert('Error creating job');
   }
 };
-
 
   if (!baseImage) return <div>Loading image...</div>;
 
@@ -65,7 +70,7 @@ const EditorPage = () => {
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-2xl font-bold">Image Editor</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
         <div>
           <h2 className="text-xl mb-2">Masking Tool</h2>
           <MaskingCanvas 

@@ -70,7 +70,7 @@ const EditorPage = () => {
     <div className="container mx-auto p-4 space-y-6">
       <h1 className="text-2xl font-bold">Image Editor</h1>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
         <div>
           <h2 className="text-xl mb-2">Masking Tool</h2>
           <MaskingCanvas 

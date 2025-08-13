@@ -4,6 +4,7 @@ from PIL import Image
 from django.conf import settings
 from .models import Job
 import os
+import requests
 
 @shared_task
 def process_job(job_id):
@@ -11,20 +12,24 @@ def process_job(job_id):
     job.status = 'processing'
     job.save()
 
+    files = {
+        'image': open(job.image.path, 'rb'),
+    }
+    if job.mask:
+        files['mask'] = open(job.mask.path, 'rb')
 
-    # narazie mock
-    time.sleep(5)
-
-    input_path = job.image.path
-    output_path = os.path.join(settings.MEDIA_ROOT, 'outputs', f'output_{job_id}.png')\
+    data = {
+        'prompt': job.prompt,
+        'job_id': job.id  
+    }
     
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    response = requests.post(f'{settings.MODEL_SERVICE_URL}/process-image', files=files, data=data)
+    
+    if response.status_code == 200:
+        output_url = response.json()['output_url']
+        job.output.name = output_url 
+        job.status = 'done'
+    else:
+        job.status = 'failed'
 
-    img = Image.open(input_path).convert('L')
-    img.save(output_path)
-
-    job.output.name = f'outputs/output_{job_id}.png'
-    job.status = 'done'
     job.save()
-
-    return job.output.url

@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Stage, Layer, Image, Line, Rect } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Line, Rect } from 'react-konva';
 import Konva from 'konva';
 
 interface MaskingCanvasProps {
@@ -24,56 +24,29 @@ type Selection = {
 const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   const [lines, setLines] = useState<LineData[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [brushSize, setBrushSize] = useState(10);
-  const [showMask, setShowMask] = useState(false);
   const [tool, setTool] = useState<'brush' | 'eraser'>('brush');
   const [drawingMode, setDrawingMode] = useState<'free' | 'lasso' | 'rectangle'>('free');
   const [selection, setSelection] = useState<Selection>(null);
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
-  const [scale, setScale] = useState(1);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
-  // Skalowanie obrazu z zachowaniem proporcji
+  // Dopasowanie Stage do obrazu
   useEffect(() => {
-    if (!baseImage || !containerRef.current) return;
-
-    const container = containerRef.current;
-    const containerWidth = container.clientWidth;
-    const containerHeight = window.innerHeight * 0.7; // 70% wysokości okna
-
-    const imgRatio = baseImage.naturalWidth / baseImage.naturalHeight;
-    const containerRatio = containerWidth / containerHeight;
-
-    let scaledWidth, scaledHeight;
-
-    if (imgRatio > containerRatio) {
-      // Obraz szerszy niż kontener - skalowanie do szerokości
-      scaledWidth = containerWidth;
-      scaledHeight = containerWidth / imgRatio;
-    } else {
-      // Obraz wyższy niż kontener - skalowanie do wysokości
-      scaledHeight = containerHeight;
-      scaledWidth = containerHeight * imgRatio;
-    }
-
-    setScale(scaledWidth / baseImage.naturalWidth);
+    if (!baseImage) return;
     setCanvasSize({
-      width: scaledWidth,
-      height: scaledHeight
+      width: baseImage.naturalWidth,
+      height: baseImage.naturalHeight,
     });
   }, [baseImage]);
 
   const getRelativePointerPosition = (stage: Konva.Stage) => {
     const pos = stage.getPointerPosition();
     if (!pos) return null;
-    
-    return {
-      x: pos.x / scale,
-      y: pos.y / scale
-    };
+    return { x: pos.x, y: pos.y };
   };
 
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -96,12 +69,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
       ]);
     } else if (drawingMode === 'rectangle') {
       setSelectionStart(pos);
-      setSelection({
-        x: pos.x,
-        y: pos.y,
-        width: 0,
-        height: 0,
-      });
+      setSelection({ x: pos.x, y: pos.y, width: 0, height: 0 });
       setIsDrawing(true);
     }
   };
@@ -160,57 +128,47 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
       setSelectionStart(null);
       setSelection(null);
     }
+
     setIsDrawing(false);
   };
 
-  // Eksport maski
+  // Eksport maski w oryginalnej rozdzielczości
   useEffect(() => {
     if (!baseImage) return;
 
-    // Utwórz tymczasowy canvas w oryginalnych wymiarach obrazu
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = baseImage.naturalWidth;
     tempCanvas.height = baseImage.naturalHeight;
     const ctx = tempCanvas.getContext('2d');
-    
     if (!ctx) return;
 
-    // Wypełnij białym tłem
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
-    // Narysuj wszystkie linie
-    ctx.fillStyle = 'black';
-    ctx.strokeStyle = 'black';
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    const scaleX = baseImage.naturalWidth / canvasSize.width;
+    const scaleY = baseImage.naturalHeight / canvasSize.height;
 
-    lines.forEach(line => {
+    lines.forEach((line) => {
       if (line.points.length < 2) return;
 
       ctx.beginPath();
-      ctx.moveTo(line.points[0].x, line.points[0].y);
-      
+      ctx.moveTo(line.points[0].x * scaleX, line.points[0].y * scaleY);
       for (let i = 1; i < line.points.length; i++) {
-        ctx.lineTo(line.points[i].x, line.points[i].y);
+        ctx.lineTo(line.points[i].x * scaleX, line.points[i].y * scaleY);
       }
-
-      ctx.lineWidth = line.brushSize;
+      ctx.lineWidth = line.brushSize * ((scaleX + scaleY) / 2);
       ctx.strokeStyle = line.color === 'black' ? 'black' : 'white';
-      
       if (line.closed) {
         ctx.closePath();
         ctx.fillStyle = 'black';
         ctx.fill();
       }
-      
       ctx.stroke();
     });
 
-    // Eksportuj jako data URL
     const dataUrl = tempCanvas.toDataURL('image/png');
     onMaskExport(dataUrl);
-  }, [lines, baseImage, onMaskExport]);
+  }, [lines, baseImage, canvasSize, onMaskExport]);
 
   const resetAll = () => {
     setLines([]);
@@ -223,7 +181,6 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
       <div className="flex gap-4 items-center flex-wrap">
         <label>
           Brush Size:
@@ -237,104 +194,29 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
           />
           {brushSize}px
         </label>
-        <button
-          onClick={() => {
-            setTool('brush');
-            setDrawingMode('free');
-          }}
-          className={`px-3 py-1 rounded ${
-            tool === 'brush' && drawingMode === 'free'
-              ? 'bg-blue-400 text-white'
-              : 'bg-gray-200'
-          }`}
-        >
-          Brush
-        </button>
-        <button
-          onClick={() => {
-            setTool('eraser');
-            setDrawingMode('free');
-          }}
-          className={`px-3 py-1 rounded ${
-            tool === 'eraser' && drawingMode === 'free'
-              ? 'bg-blue-400 text-white'
-              : 'bg-gray-200'
-          }`}
-        >
-          Eraser
-        </button>
-        <button
-          onClick={() => {
-            setDrawingMode('free');
-            setTool('brush');
-          }}
-          className={`px-3 py-1 rounded ${
-            drawingMode === 'free' ? 'bg-blue-400 text-white' : 'bg-gray-200'
-          }`}
-        >
-          Free Draw
-        </button>
-        <button
-          onClick={() => {
-            setDrawingMode('lasso');
-            setTool('brush');
-          }}
-          className={`px-3 py-1 rounded ${
-            drawingMode === 'lasso' ? 'bg-blue-400 text-white' : 'bg-gray-200'
-          }`}
-        >
-          Lasso Select
-        </button>
-        <button
-          onClick={() => {
-            setDrawingMode('rectangle');
-            setTool('brush');
-          }}
-          className={`px-3 py-1 rounded ${
-            drawingMode === 'rectangle' ? 'bg-blue-400 text-white' : 'bg-gray-200'
-          }`}
-        >
-          Rect Select
-        </button>
-        <button
-          onClick={() => setShowMask(!showMask)}
-          className="px-3 py-1 rounded bg-gray-200"
-        >
-          {showMask ? 'Hide Mask' : 'Show Mask Preview'}
-        </button>
-        <button
-          onClick={resetAll}
-          className="px-3 py-1 rounded bg-red-500 text-white"
-        >
-          Reset
-        </button>
+        <button onClick={() => { setTool('brush'); setDrawingMode('free'); }}>Brush</button>
+        <button onClick={() => { setTool('eraser'); setDrawingMode('free'); }}>Eraser</button>
+        <button onClick={() => { setDrawingMode('free'); setTool('brush'); }}>Free Draw</button>
+        <button onClick={() => { setDrawingMode('lasso'); setTool('brush'); }}>Lasso Select</button>
+        <button onClick={() => { setDrawingMode('rectangle'); setTool('brush'); }}>Rect Select</button>
+        <button onClick={resetAll}>Reset</button>
       </div>
 
-      {/* Kontener canvas */}
-      <div
-        ref={containerRef}
-        className="border overflow-hidden"
-        style={{ maxWidth: '100%' }}
-      >
+      <div ref={containerRef} style={{ border: '1px solid #ccc', display: 'inline-block' }}>
         <Stage
           ref={stageRef}
           width={canvasSize.width}
           height={canvasSize.height}
-          scaleX={scale}
-          scaleY={scale}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          style={{
-            cursor: drawingMode === 'lasso' ? 'crosshair' : 'default',
-            display: 'block',
-          }}
+          style={{ cursor: drawingMode === 'lasso' ? 'crosshair' : 'default' }}
         >
           <Layer>
-            <Image
+            <KonvaImage
               image={baseImage}
-              width={baseImage.naturalWidth}
-              height={baseImage.naturalHeight}
+              width={canvasSize.width}
+              height={canvasSize.height}
             />
           </Layer>
           <Layer>
@@ -348,18 +230,17 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
                 lineJoin="round"
                 tension={0.5}
                 closed={line.closed}
-                fill={line.closed && showMask ? 'rgba(0,0,0,0.5)' : undefined}
+                fill={line.closed ? 'rgba(0,0,0,0.3)' : undefined}
               />
             ))}
-            {drawingMode === 'rectangle' && selection && (
+            {selection && (
               <Rect
                 x={selection.x}
                 y={selection.y}
                 width={selection.width}
                 height={selection.height}
-                stroke="blue"
-                strokeWidth={2}
-                dash={[10, 5]}
+                stroke="black"
+                dash={[4, 4]}
               />
             )}
           </Layer>

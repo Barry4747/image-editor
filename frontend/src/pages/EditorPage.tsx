@@ -12,6 +12,7 @@ const EditorPage = () => {
   const [baseImage, setBaseImage] = useState<HTMLImageElement | null>(null);
   const [prompt, setPrompt] = useState('');
   const [maskData, setMaskData] = useState('');
+  const [sessionId, setSessionId] = useState('dummy-session-id');
 
   // Load image from uploaded file
   useEffect(() => {
@@ -25,44 +26,41 @@ const EditorPage = () => {
   }, [state, navigate]);
 
   const handleSubmit = async () => {
-  if (!maskData || !prompt.trim() || !baseImage) {
-    alert('Please create a mask, enter a prompt, and ensure image is loaded');
-    return;
-  }
-
-  try {
-    // Zamiana maski z dataURL na Blob
-    const maskBlob = await (await fetch(maskData)).blob();
-    const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
-
-    // Zamiana baseImage.src na Blob
-    const imgResponse = await fetch(baseImage.src);
-    const imgBlob = await imgResponse.blob();
-    const imageFile = new File([imgBlob], 'image.png', { type: imgBlob.type });
-
-    const formData = new FormData();
-    formData.append('image', imageFile);
-    formData.append('mask', maskFile);
-    formData.append('prompt', prompt);
-
-    const response = await fetch('/jobs', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create job');
+    if (!maskData || !prompt.trim() || !baseImage) {
+      alert('Please create a mask, enter a prompt, and ensure image is loaded');
+      return;
     }
 
-    const data = await response.json();
-    console.log('Job created:', data);
+    try {
+      const maskBlob = await (await fetch(maskData)).blob();
+      const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
 
-    alert(`Job created! ID: ${data.job_id}`);
-  } catch (err) {
-    console.error(err);
-    alert('Error creating job');
-  }
-};
+      const imgResponse = await fetch(baseImage.src);
+      const imgBlob = await imgResponse.blob();
+      const imageFile = new File([imgBlob], 'image.png', { type: imgBlob.type });
+
+      const formData = new FormData();
+      formData.append('image', imageFile);
+      formData.append('mask', maskFile);
+      formData.append('prompt', prompt);
+
+      const response = await fetch('/jobs', {
+        method: 'POST',
+        headers: { 'X-Session-ID': sessionId },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Failed to create job');
+
+      const data = await response.json();
+      console.log('Job created:', data);
+
+      navigate(`/job/${data.job_id}`);
+    } catch (err) {
+      console.error(err);
+      alert('Error creating job');
+    }
+  };
 
   if (!baseImage) return <div>Loading image...</div>;
 

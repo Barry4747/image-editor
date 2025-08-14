@@ -4,3 +4,5 @@ requests==2.32.4
 sqlparse==0.5.3
 django-cors-headers==4.7.0
 celery[redis]==5.3.6
+channels
+channels-redis

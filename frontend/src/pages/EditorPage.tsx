@@ -16,14 +16,36 @@ const EditorPage = () => {
 
   // Load image from uploaded file
   useEffect(() => {
-    if (!state?.imageUrl) {
-      navigate('/');
-      return;
-    }
-    const img = new Image();
-    img.src = state.imageUrl;
-    img.onload = () => setBaseImage(img);
-  }, [state, navigate]);
+  if (!state?.imageUrl) {
+    navigate('/');
+    return;
+  }
+
+  const img = new Image();
+  img.src = state.imageUrl;
+  img.onload = () => {
+    // Skalowanie
+    const MAX_WIDTH = 1024;
+    const MAX_HEIGHT = 1024;
+    let { width, height } = img;
+    const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height, 1);
+    width = width * ratio;
+    height = height * ratio;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const scaledImg = new Image();
+    scaledImg.src = canvas.toDataURL('image/png');
+    scaledImg.onload = () => setBaseImage(scaledImg);
+  };
+}, [state, navigate]);
+
 
   const handleSubmit = async () => {
     if (!maskData || !prompt.trim() || !baseImage) {

@@ -1,0 +1,4 @@
+models:
+  sd-inpainting:
+    class: InpaintingModel
+    path: C:/Users/Bartek/AImodels/Inpainting/stable-diffusion-2-inpainting

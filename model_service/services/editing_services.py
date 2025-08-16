@@ -4,6 +4,7 @@ import uuid
 from dotenv import load_dotenv
 import logging
 from urllib.parse import urljoin
+from stable_diffusion.registry import ModelManager
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("my_app")
@@ -14,23 +15,31 @@ BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "media")  # np. <project_root>/data/me
 MEDIA_ROOT = os.path.join(BASE_MEDIA_ROOT, "outputs")  # fizyczne miejsce zapisu
 MEDIA_URL = '/media/'  # URL odpowiadający BASE_MEDIA_ROOT
 
-def process_image_file(image_path: str) -> str:
+def process_image_file(input_img: Image.Image,
+    mask_img: Image.Image,
+    prompt: str,
+    job_id: int,
+    model: str,
+    strength: float,
+    guidance_scale: float,
+    steps: int,
+) -> str:
     os.makedirs(MEDIA_ROOT, exist_ok=True)
-    logging.debug(f"Ensured MEDIA_ROOT exists: {MEDIA_ROOT}")
 
-    try:
-        img = Image.open(image_path).convert("L")
-    except FileNotFoundError:
-        logging.error(f"File not found: {image_path}")
-        raise
-    except Exception as e:
-        logging.error(f"Error opening image: {e}")
-        raise
+    model_instance = ModelManager.get_model(model)
 
-    output_filename = f"output_{uuid.uuid4().hex}.png"
-    output_path = os.path.join(MEDIA_ROOT, output_filename)
-    img.save(output_path)
-    logging.info(f"Saved processed image to: {output_path}")
+    output_img = model_instance.generate_image(
+        image=input_img,
+        mask_image=mask_img,
+        prompt=prompt,
+        strength=strength,
+        guidance_scale=guidance_scale,
+        steps=steps,
+        invert_mask=True
+    )
+
+    output_path = os.path.join(MEDIA_ROOT, f"output_{job_id}.png")
+    output_img.save(output_path)
 
     return output_path
 

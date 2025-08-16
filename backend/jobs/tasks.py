@@ -1,29 +1,14 @@
 import os
 import logging
 import requests
-from contextlib import contextmanager
 from urllib.parse import urljoin
 from celery import shared_task
-from PIL import Image
 from django.conf import settings
 from .models import Job
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 logger = logging.getLogger(__name__)
-
-@contextmanager
-def managed_file(file_path, mode='rb'):
-    file = None
-    try:
-        file = open(file_path, mode)
-        yield file
-    except Exception as e:
-        logger.error(f"Error handling file {file_path}: {str(e)}")
-        raise
-    finally:
-        if file:
-            file.close()
 
 def send_progress(session_id, event_type, **kwargs):
     try:
@@ -46,13 +31,6 @@ def update_job_status(job, status, session_id=None, **kwargs):
         send_progress(session_id, status, job_id=job.id, **kwargs)
 
 def format_output_url(file_path):
-    """
-    Converts system file path to browser-accessible URL.
-    Handles:
-    - Windows paths: 'C:\\...\\media\\outputs\\image.png' -> '/media/outputs/image.png'
-    - Linux paths: '/var/www/media/outputs/image.png' -> '/media/outputs/image.png'
-    - Existing URLs: '/media/outputs/image.png' -> unchanged
-    """
     if not file_path:
         return None
     
@@ -81,56 +59,75 @@ def process_job(self, job_id):
         send_progress(job.session_id, "created", job_id=job.id)
 
         files = {}
+        file_handles = []
+        
         try:
-            with managed_file(job.image.path) as img_file:
-                files['image'] = img_file
-                
-                if job.mask and os.path.exists(job.mask.path):
-                    with managed_file(job.mask.path) as mask_file:
-                        files['mask'] = mask_file
-                
-                send_progress(job.session_id, "progress", job_id=job.id, progress=20)
-                
-                data = {'prompt': job.prompt, 'job_id': job.id}
-                response = requests.post(
-                    f'{settings.MODEL_SERVICE_URL}/process-image',
-                    files=files,
-                    data=data,
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    output_url = result.get('output_url')
-                    
-                    if output_url:
-                        formatted_url = format_output_url(output_url)
-                        relative_path = formatted_url.replace(settings.MEDIA_URL, '', 1).lstrip('/')
-                        job.output.name = relative_path
-                        
-                        update_job_status(
-                            job, 
-                            'done', 
-                            job.session_id, 
-                            output_url=formatted_url,
-                            progress=100
-                        )
-                    else:
-                        raise ValueError("Missing output_url in response")
-                else:
-                    error_msg = f"Model error: {response.status_code}"
-                    logger.error(error_msg)
-                    raise requests.HTTPError(error_msg)
-                    
-        except (IOError, OSError) as e:
-            logger.error(f"File error: {str(e)}")
-            update_job_status(job, 'failed', job.session_id)
-            raise
-        except requests.RequestException as e:
-            logger.error(f"API error: {str(e)}")
-            update_job_status(job, 'failed', job.session_id)
-            raise self.retry(exc=e, countdown=60)
+            if job.image:
+                try:
+                    f = job.image.open('rb')
+                    files["image"] = (os.path.basename(job.image.name), f, "image/png")
+                    file_handles.append(f)
+                except Exception as e:
+                    logger.error(f"Failed to open image file: {str(e)}")
+                    raise
+
+            if job.mask:
+                try:
+                    f = job.mask.open('rb')
+                    files["mask"] = (os.path.basename(job.mask.name), f, "image/png")
+                    file_handles.append(f)
+                except Exception as e:
+                    logger.error(f"Failed to open mask file: {str(e)}")
+                    raise
+
+            send_progress(job.session_id, "progress", job_id=job.id, progress=20)
+
+            data = {"prompt": job.prompt, "job_id": job.id}
+            response = requests.post(
+                f"{settings.MODEL_SERVICE_URL}/process-image",
+                files=files,
+                data=data,
+                timeout=120
+            )
             
+            if response.status_code == 200:
+                result = response.json()
+                output_url = result.get("output_url")
+                
+                if output_url:
+                    formatted_url = format_output_url(output_url)
+                    relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")
+                    job.output.name = relative_path
+                    
+                    update_job_status(
+                        job, 
+                        "done", 
+                        job.session_id, 
+                        output_url=formatted_url,
+                        progress=100
+                    )
+                else:
+                    raise ValueError("Missing output_url in response")
+            else:
+                error_msg = f"Model error: {response.status_code}"
+                logger.error(error_msg)
+                raise requests.HTTPError(error_msg)
+
+        finally:
+            for f in file_handles:
+                try:
+                    f.close()
+                except Exception as e:
+                    logger.error(f"Error closing file: {str(e)}")
+
+    except (IOError, OSError) as e:
+        logger.error(f"File error: {str(e)}")
+        update_job_status(job, "failed", job.session_id)
+        raise
+    except requests.RequestException as e:
+        logger.error(f"API error: {str(e)}")
+        update_job_status(job, "failed", job.session_id)
+        raise self.retry(exc=e, countdown=60)
     except Exception as e:
         logger.error(f"Processing error: {str(e)}")
         if not Job.objects.filter(id=job_id).exists():
@@ -138,5 +135,5 @@ def process_job(self, job_id):
             return
         
         job.refresh_from_db()
-        update_job_status(job, 'failed', job.session_id)
+        update_job_status(job, "failed", job.session_id)
         raise

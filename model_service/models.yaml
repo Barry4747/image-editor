@@ -2,3 +2,4 @@ models:
   sd-inpainting:
     class: InpaintingModel
     path: C:/Users/Bartek/AImodels/Inpainting/stable-diffusion-2-inpainting
+    vae: C:/Users/Bartek/AImodels/VAE/SD-1.5-Hyper-Inpainting-VAE

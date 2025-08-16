@@ -30,13 +30,14 @@ class ModelManager:
             model_info = cls._model_map[model_name]
             model_class_name = model_info["class"]
             model_path = model_info["path"]
+            vae_path = model_info["vae"]
 
             if model_class_name not in CLASS_MAP:
                 raise ValueError(f"Unknown class: {model_class_name}")
 
             model_class = CLASS_MAP[model_class_name]
             instance = model_class()
-            instance.load_model(model_path)
+            instance.load_model(model_path, vae_path=vae_path)
             cls._instances[model_name] = instance
 
         return cls._instances[model_name]

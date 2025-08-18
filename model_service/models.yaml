@@ -1,5 +1,18 @@
 models:
-  sd-inpainting:
-    class: InpaintingModel
-    path: C:/Users/Bartek/AImodels/Inpainting/stable-diffusion-2-inpainting
-    vae: C:/Users/Bartek/AImodels/VAE/SD-1.5-Hyper-Inpainting-VAE
+  sd1.5-controlnet-canny:
+    class: ControlNetModelWrapper
+    path: C:/Users/Bartek/AImodels/ImageGeneration/Whole/stable-diffusion-v1-5
+    controlnet_path: C:/Users/Bartek/AImodels/Controlnet/sd-controlnet-canny
+    vae: null
+
+  sd1.5-controlnet-depth:
+    class: ControlNetModelWrapper
+    path: C:/Users/Bartek/AImodels/ImageGeneration/Whole/stable-diffusion-v1-5
+    controlnet_path: C:/Users/Bartek/AImodels/Controlnet/sd-controlnet-depth
+    vae: null
+
+  sd1.5-controlnet-scribble:
+    class: ControlNetModelWrapper
+    path: C:/Users/Bartek/AImodels/ImageGeneration/Whole/stable-diffusion-v1-5
+    controlnet_path: C:/Users/Bartek/AImodels/Controlnet/sd-controlnet-scribble
+    vae: null

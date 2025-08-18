@@ -1,10 +1,10 @@
 import yaml
 import os
 from typing import Dict, Any
-from .inpainting import InpaintingModel
+from .controlnet import ControlNet
 
 CLASS_MAP = {
-    "InpaintingModel": InpaintingModel,
+    "ControlNetModelWrapper": ControlNet
 }
 
 class ModelManager:
@@ -30,14 +30,19 @@ class ModelManager:
             model_info = cls._model_map[model_name]
             model_class_name = model_info["class"]
             model_path = model_info["path"]
-            vae_path = model_info["vae"]
+            vae_path = model_info.get("vae")
+            controlnet_path = model_info.get("controlnet_path")
 
             if model_class_name not in CLASS_MAP:
                 raise ValueError(f"Unknown class: {model_class_name}")
 
             model_class = CLASS_MAP[model_class_name]
             instance = model_class()
-            instance.load_model(model_path, vae_path=vae_path)
+            instance.load_model(
+                model_path,
+                vae_path=vae_path,
+                controlnet_path=controlnet_path
+            )
             cls._instances[model_name] = instance
 
         return cls._instances[model_name]

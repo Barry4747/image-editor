@@ -1,7 +1,7 @@
-from fastapi import APIRouter, UploadFile, Form
+from fastapi import APIRouter, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 import io
-from services.editing_services import process_image_file, convert_system_path_to_url
+from services.editing_services import process_image_file
 from PIL import Image
 
 router = APIRouter()
@@ -9,13 +9,13 @@ router = APIRouter()
 @router.post("/process-image")
 async def process_image(
     image: UploadFile,
-    mask: UploadFile = None,
+    mask: UploadFile = File(None),
     prompt: str = Form(...),
     job_id: int = Form(...),
-    model: str = Form("sd-inpainting"),
+    model: str = Form("sd1.5-controlnet-canny"),
     strength: float = Form(0.75),
-    guidance_scale: float = Form(7.5),
-    steps: int = Form(30)
+    guidance_scale: float = Form(5.5),
+    steps: int = Form(25),
 ):
     input_img = Image.open(io.BytesIO(await image.read())).convert("RGB")
     mask_img = None

@@ -6,10 +6,6 @@ class JobProgressConsumer(AsyncWebsocketConsumer):
         self.session_id = self.scope['url_route']['kwargs']['session_id']
         self.group_name = f"progress_{self.session_id}"
 
-        print(f"Session ID: {self.session_id}")
-        print(f"Connecting to group: {self.group_name}")
-        print(f"Channel name: {self.channel_name}")
-
         await self.channel_layer.group_add(
             self.group_name,
             self.channel_name
@@ -24,5 +20,4 @@ class JobProgressConsumer(AsyncWebsocketConsumer):
         )
 
     async def job_progress(self, event):
-        print(f"Received event: {event}")
         await self.send(text_data=json.dumps(event))

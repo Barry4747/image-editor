@@ -16,6 +16,7 @@ async def process_image(
     strength: float = Form(0.75),
     guidance_scale: float = Form(5.5),
     steps: int = Form(25),
+    passes: int = Form(4),
 ):
     input_img = Image.open(io.BytesIO(await image.read())).convert("RGB")
     mask_img = None
@@ -31,6 +32,7 @@ async def process_image(
         strength=strength,
         guidance_scale=guidance_scale,
         steps=steps,
+        passes=passes,
     )
 
     return JSONResponse({"output_url": output_path})

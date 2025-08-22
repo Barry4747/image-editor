@@ -20,6 +20,10 @@ import os
 
 DJANGO_API_URL = os.getenv("DJANGO_API_URL", "http://localhost:8000")
 
+models_to_blur = [
+    "lustify-sdxl",
+]
+
 def notify_progress(job_id: int, progress: int, output_path: str):
     try:
         requests.post(
@@ -75,6 +79,11 @@ def process_image_file(
         mask_to_use = mask_img
         if last_pass:
             mask_to_use = mask_img.filter(ImageFilter.GaussianBlur(radius=5))
+            model_instance = ModelManager.switch_model(old_model=model, new_model="lustify-sdxl")
+            control_img = preprocess_canny(current_img)
+            cur_steps = cur_steps + 10
+        elif model in models_to_blur:
+            mask_to_use = mask_img.filter(ImageFilter.GaussianBlur(radius=2))
 
 
         current_img = model_instance.generate_image(

@@ -2,9 +2,15 @@ import yaml
 import os
 from typing import Dict, Any
 from .controlnet import ControlNet
+from .realistic_vision import RealisticVision
+from .cyberrealistic import CyberRealistic
+from .lustify_sdxl import LustifySDXL
 
 CLASS_MAP = {
-    "ControlNetModelWrapper": ControlNet
+    "ControlNetModelWrapper": ControlNet,
+    "RealisticVisionModelWrapper": RealisticVision,
+    "CyberRealisticModelWrapper": CyberRealistic,
+    "LustifyodelWrapper": LustifySDXL,
 }
 
 class ModelManager:
@@ -52,3 +58,11 @@ class ModelManager:
         if model_name in cls._instances:
             cls._instances[model_name].unload_model()
             del cls._instances[model_name]
+
+
+    @classmethod
+    def switch_model(cls, old_model: str, new_model: str):
+        if old_model == new_model:
+            return cls.get_model(old_model)
+        cls.unload_model(old_model)
+        return cls.get_model(new_model)

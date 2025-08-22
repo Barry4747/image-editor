@@ -2,40 +2,29 @@ import os
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from typing import Optional
-import io
 import torch
 from PIL import Image, ImageOps
-from diffusers import (
-    StableDiffusionInpaintPipeline,
-    StableDiffusionControlNetInpaintPipeline,
-    ControlNetModel,
-    AutoencoderKL,
-)
+from diffusers import StableDiffusionInpaintPipeline, AutoencoderKL, DPMSolverMultistepScheduler
 from fastapi import HTTPException
 import logging
 
 logger = logging.getLogger(__name__)
 
-
-class ControlNet:
+class RealisticVision:
     """
-    Simple inpainting pipeline with optional ControlNet support.
-    It uses stable diffusion 1.5 model, controlnets (in this case canny)
+    RealisticVision inpainting pipeline using checkpoint converted to diffusers format.
+    Supports init_image + mask_image for inpainting.
     """
 
-    def __init__(self, use_controlnet: bool = True, device: Optional[str] = None):
-        self.use_controlnet = use_controlnet
+    def __init__(self, device: Optional[str] = None):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.pipeline = None
-        self._controlnet_loaded = False
 
-    # ------------- loading/unloading -------------
+    # ---------------- loading/unloading ----------------
 
     def _enable_speed_optimizations(self, pipe):
         if hasattr(pipe, "enable_vae_slicing"):
             pipe.enable_vae_slicing()
-        if hasattr(pipe, "enable_vae_tiling"):
-            pipe.enable_vae_tiling()
         if hasattr(pipe, "enable_attention_slicing"):
             pipe.enable_attention_slicing()
         try:
@@ -58,40 +47,29 @@ class ControlNet:
         self,
         model_path: str,
         vae_path: Optional[str] = None,
-        controlnet_path: Optional[str] = None,
         torch_dtype: torch.dtype = torch.float16,
+        controlnet_path: Optional[str] = None,
     ):
+        """
+        Load RealisticVision inpaint pipeline from a diffusers folder
+        """
         try:
-            controlnet = None
-            if self.use_controlnet and controlnet_path:
-                controlnet = ControlNetModel.from_pretrained(controlnet_path, torch_dtype=torch_dtype)
-                self._controlnet_loaded = True
-
-            if controlnet is not None:
-                self.pipeline = StableDiffusionControlNetInpaintPipeline.from_pretrained(
-                    model_path,
-                    controlnet=controlnet,
-                    torch_dtype=torch_dtype,
-                    safety_checker=None,
-                    feature_extractor=None,
-                )
-            else:
-                self.pipeline = StableDiffusionInpaintPipeline.from_pretrained(
-                    model_path,
-                    torch_dtype=torch_dtype,
-                    safety_checker=None,
-                    feature_extractor=None,
-                )
+            self.pipeline = StableDiffusionInpaintPipeline.from_single_file(
+                model_path,
+                torch_dtype=torch_dtype,
+                safety_checker=None,
+                feature_extractor=None,
+            )
 
             if vae_path:
                 logger.info(f"Loading VAE from {vae_path}")
                 self.pipeline.vae = AutoencoderKL.from_pretrained(vae_path, torch_dtype=torch_dtype)
-
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(self.pipeline.scheduler.config)
             self._enable_speed_optimizations(self.pipeline)
             self.pipeline.to(self.device)
 
         except Exception as e:
-            logger.exception("Error on loading model/pipeline")
+            logger.exception("Error loading RealisticVision inpaint pipeline")
             raise HTTPException(status_code=500, detail=f"Model loading error: {e}")
 
     def unload_model(self):
@@ -104,7 +82,7 @@ class ControlNet:
         except Exception:
             pass
 
-    # ------------- helpers -------------
+    # ---------------- helpers ----------------
 
     @staticmethod
     def _to_multiple_of_8(size):
@@ -121,22 +99,18 @@ class ControlNet:
 
     @staticmethod
     def _maybe_invert_mask(mask_l: Image.Image) -> Image.Image:
-        """
-        If there are more white pixels than black, inverts the mask.
-        (In sd 1.5 inpainting white is the area to be modified)
-        """
         hist = mask_l.histogram()
         black = sum(hist[:128])
         white = sum(hist[128:])
         if white < black:
             return ImageOps.invert(mask_l)
         return mask_l
-    
+
     @staticmethod
     def _invert_mask(mask_l: Image.Image) -> Image.Image:
         return ImageOps.invert(mask_l)
 
-    # ------------- inference -------------
+    # ---------------- inference ----------------
 
     def generate_image(
         self,
@@ -149,12 +123,11 @@ class ControlNet:
         guidance_scale: float = 7.5,
         strength: float = 0.75,
         seed: Optional[int] = None,
-        control_image: Optional[Image.Image] = None,
-        controlnet_conditioning_scale: float = 1.0,
         keep_background: bool = True,
         invert_mask_if_needed: bool = False,
         invert_mask: bool = True,
         resize_to_multiple_of_8: bool = True,
+        control_image: Optional[Image.Image] = None,
     ) -> Image.Image:
         if self.pipeline is None:
             raise HTTPException(status_code=500, detail="Pipeline not loaded")
@@ -174,15 +147,8 @@ class ControlNet:
 
         if invert_mask_if_needed and not invert_mask:
             mask_l = self._maybe_invert_mask(mask_l)
-
         elif invert_mask:
             mask_l = self._invert_mask(mask_l)
-
-
-        if self.use_controlnet and self._controlnet_loaded:
-            if control_image is None:
-                control_image = init_image
-            control_image = self._ensure_rgb(control_image).resize(target_size, Image.LANCZOS)
 
         generator = None
         if seed is not None:
@@ -196,20 +162,16 @@ class ControlNet:
                 mask_image=mask_l,
                 num_inference_steps=steps,
                 guidance_scale=guidance_scale,
-                strength=strength,  
+                strength=strength,
                 generator=generator,
             )
 
-            if self.use_controlnet and self._controlnet_loaded:
-                kwargs.update(
-                    dict(
-                        control_image=control_image,
-                        controlnet_conditioning_scale=controlnet_conditioning_scale,
-                    )
-                )
-
             result = self.pipeline(**kwargs)
             gen = result.images[0]
+            if gen.size != init_image.size:
+                gen = gen.resize(init_image.size, Image.LANCZOS)
+            if mask_l.size != init_image.size:
+                mask_l = mask_l.resize(init_image.size, Image.NEAREST)
 
             if keep_background:
                 final = Image.composite(gen, init_image, mask_l)

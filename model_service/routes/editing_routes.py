@@ -12,10 +12,10 @@ async def process_image(
     mask: UploadFile = File(None),
     prompt: str = Form(...),
     job_id: int = Form(...),
-    model: str = Form("sd1.5-controlnet-canny"),
+    model: str = Form("cyberrealistic-inpaint-v8.0"),
     strength: float = Form(0.75),
-    guidance_scale: float = Form(5.5),
-    steps: int = Form(25),
+    guidance_scale: float = Form(9.5),
+    steps: int = Form(40),
     passes: int = Form(4),
 ):
     input_img = Image.open(io.BytesIO(await image.read())).convert("RGB")

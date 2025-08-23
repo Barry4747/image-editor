@@ -14,38 +14,56 @@ const EditorPage = () => {
   const [maskData, setMaskData] = useState('');
   const [sessionId, setSessionId] = useState('dummy-session-id');
 
+  // Nowe stany dla modeli
+  const [models, setModels] = useState<string[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('');
+
   // Load image from uploaded file
   useEffect(() => {
-  if (!state?.imageUrl) {
-    navigate('/');
-    return;
-  }
+    if (!state?.imageUrl) {
+      navigate('/');
+      return;
+    }
 
-  const img = new Image();
-  img.src = state.imageUrl;
-  img.onload = () => {
-    // Skalowanie
-    const MAX_WIDTH = 1024;
-    const MAX_HEIGHT = 1024;
-    let { width, height } = img;
-    const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height, 1);
-    width = width * ratio;
-    height = height * ratio;
+    const img = new Image();
+    img.src = state.imageUrl;
+    img.onload = () => {
+      const MAX_WIDTH = 1024;
+      const MAX_HEIGHT = 1024;
+      let { width, height } = img;
+      const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height, 1);
+      width = width * ratio;
+      height = height * ratio;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(img, 0, 0, width, height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, width, height);
 
-    const scaledImg = new Image();
-    scaledImg.src = canvas.toDataURL('image/png');
-    scaledImg.onload = () => setBaseImage(scaledImg);
-  };
-}, [state, navigate]);
+      const scaledImg = new Image();
+      scaledImg.src = canvas.toDataURL('image/png');
+      scaledImg.onload = () => setBaseImage(scaledImg);
+    };
+  }, [state, navigate]);
 
+  // Pobieranie modeli z API
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const res = await fetch('/api/models/');
+        if (!res.ok) throw new Error('Failed to fetch models');
+        const data = await res.json();
+        setModels(data.models || []);
+        if (data.models?.length > 0) setSelectedModel(data.models[0]); // domyślny pierwszy
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchModels();
+  }, []);
 
   const handleSubmit = async () => {
     if (!maskData || !prompt.trim() || !baseImage) {
@@ -65,6 +83,7 @@ const EditorPage = () => {
       formData.append('image', imageFile);
       formData.append('mask', maskFile);
       formData.append('prompt', prompt);
+      formData.append('model', selectedModel);
 
       const response = await fetch('/jobs', {
         method: 'POST',
@@ -108,6 +127,21 @@ const EditorPage = () => {
               placeholder="Describe what you want to generate..."
               className="w-full h-32 p-2 border rounded"
             />
+          </div>
+
+          <div>
+            <h2 className="text-xl mb-2">Model</h2>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="w-full p-2 border rounded"
+            >
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
           </div>
 
           <button

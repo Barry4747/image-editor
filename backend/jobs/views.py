@@ -7,6 +7,8 @@ from .tasks import process_job, send_progress
 from .models import Job
 import logging
 from rest_framework.decorators import api_view
+import requests
+from django.conf import settings
 
 class CreateJobView(views.APIView):
     def post(self, request):
@@ -17,6 +19,7 @@ class CreateJobView(views.APIView):
         image = request.FILES.get('image')
         mask = request.FILES.get('mask')
         prompt = request.data.get('prompt', '')
+        model = request.data.get('model', 'lustify-sdxl')
 
         if not image:
             return Response({"error": "Image file is required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -25,7 +28,8 @@ class CreateJobView(views.APIView):
             session_id=session_id,
             image=image,
             mask=mask,
-            prompt=prompt
+            prompt=prompt,
+            model=model
         )
         logging.info(f"Created job with ID: {job.id} for session: {session_id}")
         process_job.delay(job.id)
@@ -47,3 +51,8 @@ def job_progress(request):
     send_progress(job.session_id, "progress", job_id=job.id, progress=progress, preview_url=output_url)
 
     return Response({"message": "Progress updated successfully."}, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def get_models(request):
+    models = requests.get(f"{settings.MODEL_SERVICE_URL}/models")
+    return Response(models.json(), status=models.status_code)

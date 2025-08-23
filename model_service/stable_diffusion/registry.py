@@ -28,6 +28,10 @@ class ModelManager:
         cls._model_map = config.get("models", {})
 
     @classmethod
+    def list_models(cls):
+        return list(cls._model_map.keys())
+
+    @classmethod
     def get_model(cls, model_name: str):
         if model_name not in cls._model_map:
             raise ValueError(f"Unknown model: {model_name}")

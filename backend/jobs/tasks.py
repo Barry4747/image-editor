@@ -82,7 +82,7 @@ def process_job(self, job_id):
 
             send_progress(job.session_id, "progress", job_id=job.id, progress=20)
 
-            data = {"prompt": job.prompt, "job_id": job.id}
+            data = {"prompt": job.prompt, "job_id": job.id, "model": job.model}
             response = requests.post(
                 f"{settings.MODEL_SERVICE_URL}/process-image",
                 files=files,

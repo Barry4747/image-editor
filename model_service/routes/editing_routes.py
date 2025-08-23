@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 import io
 from services.editing_services import process_image_file
 from PIL import Image
+from stable_diffusion.registry import ModelManager
 
 router = APIRouter()
 
@@ -36,3 +37,16 @@ async def process_image(
     )
 
     return JSONResponse({"output_url": output_path})
+
+@router.get("/models")
+async def get_models():
+    """
+    Returns a list of available models.
+    """
+    models = ModelManager.list_models()
+
+    if not models:
+        status = "error"
+    else:
+        status = "success"
+    return JSONResponse({"status": status, "models": models})

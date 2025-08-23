@@ -6,7 +6,8 @@ import torch
 from PIL import Image, ImageOps
 from diffusers import (
     StableDiffusionXLInpaintPipeline,
-    UniPCMultistepScheduler,
+    AutoencoderKL,
+    EulerAncestralDiscreteScheduler,
 )
 from torchvision import transforms
 from fastapi import HTTPException
@@ -16,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 class LustifySDXL:
     """
-    Inpainting / full generation pipeline for Lustify SDXL NSFW.
-    Supports prompt + negative_prompt, recommended SDXL settings, and VRAM optimizations.
+    Inpainting / full generation pipeline for SDXL.
+    Obsługuje prompt + negative_prompt, rekomendowane ustawienia SDXL i optymalizacje VRAM.
     """
 
     def __init__(self, device: Optional[str] = None, upscaler_path: Optional[str] = None):
@@ -49,16 +50,28 @@ class LustifySDXL:
             pass
 
     # ------------- Load / Unload -------------
-    def load_model(self, model_path: str, torch_dtype: torch.dtype = torch.float16, vae_path: Optional[str] = None, controlnet_path: Optional[str] = None):
+    def load_model(
+        self, 
+        model_path: str, 
+        torch_dtype: torch.dtype = torch.float16, 
+        vae_path: Optional[str] = None, 
+        controlnet_path: Optional[str] = None
+    ):
         try:
             self.pipeline = StableDiffusionXLInpaintPipeline.from_single_file(
                 model_path, torch_dtype=torch_dtype, safety_checker=None
             )
 
-            scheduler = UniPCMultistepScheduler.from_config(self.pipeline.scheduler.config)
-            self.pipeline.scheduler = scheduler
+            if vae_path is not None:
+                try:
+                    vae = AutoencoderKL.from_pretrained(vae_path, torch_dtype=torch_dtype)
+                    self.pipeline.vae = vae
+                    logger.info(f"Loaded VAE from {vae_path}")
+                except Exception as ve:
+                    logger.warning(f"Could not load VAE from {vae_path}: {ve}")
 
-            #self._enable_speed_optimizations(self.pipeline)
+            self.pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(self.pipeline.scheduler.config)
+
             self.pipeline.to(self.device)
 
             if self.upscaler_path and os.path.isfile(self.upscaler_path):
@@ -66,7 +79,7 @@ class LustifySDXL:
                 logger.info(f"Loaded upscaler from {self.upscaler_path}")
 
         except Exception as e:
-            logger.exception("Error loading Lustify SDXL")
+            logger.exception("Error loading SDXL model")
             raise HTTPException(status_code=500, detail=f"Model loading error: {e}")
 
     def unload_model(self):
@@ -97,7 +110,7 @@ class LustifySDXL:
         init_image: Optional[Image.Image] = None,
         mask_image: Optional[Image.Image] = None,
         steps: int = 50,  
-        guidance_scale: float = 8.5,  
+        guidance_scale: float = 7.0,  
         strength: float = 0.7,
         seed: Optional[int] = None,
         keep_background: bool = True,
@@ -112,15 +125,14 @@ class LustifySDXL:
             steps = max(steps, 60)
 
         if init_image is None:
-            init_image = Image.new("RGB", (width, height), color=(255, 255, 255))
+            init_image = Image.new("RGB", (1024, 1024), color=(255, 255, 255))
         if mask_image is None:
-            mask_image = Image.new("L", (width, height), color=255)
+            mask_image = Image.new("L", (init_image.width, init_image.height), color=255)
 
         init_image = self._ensure_rgb(init_image)
         mask_image = self._ensure_l(mask_image)
-        width = init_image.width
-        height = init_image.height
-        width, height = ((width // 64) * 64, (height // 64) * 64)
+        width = (init_image.width // 64) * 64
+        height = (init_image.height // 64) * 64
         init_image = init_image.resize((width, height), Image.LANCZOS)
         mask_image = mask_image.resize((width, height), Image.NEAREST)
 

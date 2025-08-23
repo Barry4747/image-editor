@@ -12,7 +12,7 @@ async def process_image(
     mask: UploadFile = File(None),
     prompt: str = Form(...),
     job_id: int = Form(...),
-    model: str = Form("cyberrealistic-inpaint-v8.0"),
+    model: str = Form("lustify-sdxl"),
     strength: float = Form(0.75),
     guidance_scale: float = Form(9.5),
     steps: int = Form(40),

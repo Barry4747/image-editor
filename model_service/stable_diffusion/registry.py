@@ -1,17 +1,27 @@
 import yaml
 import os
+import torch
 from typing import Dict, Any
+from fastapi import HTTPException
+
 from .controlnet import ControlNet
-from .realistic_vision import RealisticVision
-from .cyberrealistic import CyberRealistic
-from .lustify_sdxl import LustifySDXL
+from .specifics.realistic_vision import RealisticVision
+from .specifics.cyberrealistic import CyberRealistic
+from .specifics.lustify_sdxl import LustifySDXL
+from .specifics.illustrious import IllustriousPony
+from .sd_inpaint_base import UnifiedInpaintModel
+from .sdxl_inpaint_base import SDXLInpaintModel
 
 CLASS_MAP = {
     "ControlNetModelWrapper": ControlNet,
     "RealisticVisionModelWrapper": RealisticVision,
     "CyberRealisticModelWrapper": CyberRealistic,
-    "LustifyodelWrapper": LustifySDXL,
+    "LustifyModelWrapper": LustifySDXL,
+    "IllustriousPonyModelWrapper": IllustriousPony,
+    "SDXLInpaintModelWrapper": SDXLInpaintModel,
+    "UnifiedInpaintModelWrapper": UnifiedInpaintModel,
 }
+
 
 class ModelManager:
     _instances: Dict[str, Any] = {}
@@ -24,12 +34,20 @@ class ModelManager:
 
         with open(config_path, "r") as f:
             config = yaml.safe_load(f)
-        
+
         cls._model_map = config.get("models", {})
 
     @classmethod
     def list_models(cls):
         return list(cls._model_map.keys())
+
+    @staticmethod
+    def _get_free_vram_gb() -> float:
+        """ Returns free VRAM in GB."""
+        if not torch.cuda.is_available():
+            return 0.0
+        free, total = torch.cuda.mem_get_info()
+        return free / (1024**3)  
 
     @classmethod
     def get_model(cls, model_name: str):
@@ -40,8 +58,24 @@ class ModelManager:
             model_info = cls._model_map[model_name]
             model_class_name = model_info["class"]
             model_path = model_info["path"]
-            vae_path = model_info.get("vae")
-            controlnet_path = model_info.get("controlnet_path")
+
+            required_vram = model_info.get("required_vram")
+            if not required_vram:
+                required_vram = 10
+
+            free_gb = cls._get_free_vram_gb()
+            if free_gb < float(required_vram):
+                models = cls._find_models_to_unload(required_vram - free_gb)
+                if models:
+                    for m in models:
+                        cls.unload_model(m)
+                    free_gb = cls._get_free_vram_gb()
+
+            extra_kwargs = {}
+            if "vae" in model_info:
+                extra_kwargs["vae_path"] = model_info.get("vae")
+            if "controlnet_path" in model_info:
+                extra_kwargs["controlnet_path"] = model_info.get("controlnet_path")
 
             if model_class_name not in CLASS_MAP:
                 raise ValueError(f"Unknown class: {model_class_name}")
@@ -50,8 +84,7 @@ class ModelManager:
             instance = model_class()
             instance.load_model(
                 model_path,
-                vae_path=vae_path,
-                controlnet_path=controlnet_path
+                **extra_kwargs,
             )
             cls._instances[model_name] = instance
 
@@ -63,10 +96,31 @@ class ModelManager:
             cls._instances[model_name].unload_model()
             del cls._instances[model_name]
 
-
     @classmethod
     def switch_model(cls, old_model: str, new_model: str):
         if old_model == new_model:
             return cls.get_model(old_model)
         cls.unload_model(old_model)
         return cls.get_model(new_model)
+    
+    @classmethod
+    def _find_models_to_unload(cls, required_vram: float) -> list:
+        """Finds models to unload to free up the required VRAM."""
+        sorted_models = sorted(
+            cls._instances.items(),
+            key=lambda item: cls._model_map[item[0]].get("required_vram", 10),
+            reverse=True
+        )
+
+        to_unload = []
+        freed_vram = 0.0
+
+        for model_name, instance in sorted_models:
+            model_info = cls._model_map[model_name]
+            model_vram = model_info.get("required_vram", 10)
+            to_unload.append(model_name)
+            freed_vram += model_vram
+            if freed_vram >= required_vram:
+                break
+
+        return to_unload

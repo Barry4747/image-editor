@@ -54,7 +54,6 @@ class CyberRealistic:
         Load RealisticVision Hyper inpaint model converted to diffusers format.
         Applies recommended scheduler settings.
         """
-        from diffusers import StableDiffusionInpaintPipeline
 
         try:
             self.pipeline = StableDiffusionInpaintPipeline.from_single_file(

@@ -149,7 +149,7 @@ class ControlNet:
         guidance_scale: float = 7.5,
         strength: float = 0.75,
         seed: Optional[int] = None,
-        control_image: Optional[Image.Image] = None,
+        control_img: Optional[Image.Image] = None,
         controlnet_conditioning_scale: float = 1.0,
         keep_background: bool = True,
         invert_mask_if_needed: bool = False,
@@ -180,9 +180,9 @@ class ControlNet:
 
 
         if self.use_controlnet and self._controlnet_loaded:
-            if control_image is None:
-                control_image = init_image
-            control_image = self._ensure_rgb(control_image).resize(target_size, Image.LANCZOS)
+            if control_img is None:
+                control_img = init_image
+            control_img = self._ensure_rgb(control_img).resize(target_size, Image.LANCZOS)
 
         generator = None
         if seed is not None:
@@ -203,7 +203,7 @@ class ControlNet:
             if self.use_controlnet and self._controlnet_loaded:
                 kwargs.update(
                     dict(
-                        control_image=control_image,
+                        control_image=control_img,
                         controlnet_conditioning_scale=controlnet_conditioning_scale,
                     )
                 )

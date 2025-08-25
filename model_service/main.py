@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from routes import editing_routes
-from stable_diffusion.registry import ModelManager
+from routes import editing_routes, auto_segmentation
+from services.registry import ModelManager
 
 app = FastAPI()
 
@@ -14,3 +14,4 @@ async def health_check():
 
 
 app.include_router(editing_routes.router)
+app.include_router(auto_segmentation.router)

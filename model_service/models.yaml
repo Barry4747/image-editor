@@ -43,3 +43,10 @@ models:
     path: C:\Users\Bartek\AImodels\VAE\damn\damnIllustriousPony_v50IllustriousNoobai.safetensors
     vae: C:\Users\Bartek\AImodels\VAE\sdxl
     required_vram: 10
+
+auto_segmantation:
+  sam-vit-h:
+    class: SamModelWrapper
+    type: vit_h
+    path: C:/Users/Bartek/AImodels/SAM/sam_vit_h_4b8939.pth
+    required_vram: 8

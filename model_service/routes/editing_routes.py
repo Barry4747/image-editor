@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 import io
 from services.editing_services import process_image_file
 from PIL import Image
-from stable_diffusion.registry import ModelManager
+from services.registry import ModelManager
 
 router = APIRouter()
 

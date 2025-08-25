@@ -3,7 +3,7 @@ from rest_framework import views
 from .serializers import JobSerializer
 from rest_framework.response import Response
 from rest_framework import status
-from .tasks import process_job, send_progress
+from .tasks import process_job, send_progress, process_segmentation
 from .models import Job
 import logging
 from rest_framework.decorators import api_view
@@ -56,3 +56,40 @@ def job_progress(request):
 def get_models(request):
     models = requests.get(f"{settings.MODEL_SERVICE_URL}/models")
     return Response(models.json(), status=models.status_code)
+
+
+@api_view(['POST'])
+def get_masks(request):
+    session_id = request.headers.get('X-Session-ID')
+    if not session_id:
+        return Response({"error": "Session ID is required."}, status=400)
+
+    image = request.FILES.get('image')
+    if not image:
+        return Response({"error": "Image file is required."}, status=400)
+
+    model = request.data.get('model', 'sam-vit-h')
+    prompt = '!auto_segmentation'
+
+    job = Job.objects.create(
+        session_id=session_id,
+        image=image,
+        prompt=prompt,
+        model=model
+    )
+
+    process_segmentation.delay(job.id)
+
+    return Response({"job_id": job.id, "status": "processing"}, status=202)
+
+@api_view(['GET'])
+def get_masks_status(request, job_id):
+    try:
+        job = Job.objects.get(id=job_id)
+    except Job.DoesNotExist:
+        return Response({"error": "Job not found"}, status=404)
+
+    if job.status == 'done':
+        return Response({"status": "done", "masks": job.masks})
+    else:
+        return Response({"status": "processing"}, status=202)

@@ -3,7 +3,7 @@ import os
 import logging
 from dotenv import load_dotenv
 from urllib.parse import urljoin
-from stable_diffusion.registry import ModelManager
+from services.registry import ModelManager
 from services.preprocessing import preprocess_canny
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(message)s")

@@ -7,8 +7,25 @@ from django.conf import settings
 from .models import Job
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+import PIL
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "media")
+MEDIA_ROOT = os.path.join(BASE_MEDIA_ROOT, "outputs")
+MEDIA_URL = "/media/"
+MASKS_DIR = os.path.join(MEDIA_ROOT, "masks")
+
+
+
+
 
 def send_progress(session_id, event_type, **kwargs):
     try:
@@ -24,11 +41,15 @@ def send_progress(session_id, event_type, **kwargs):
     except Exception as e:
         logger.error(f"Failed to send progress update: {str(e)}")
 
-def update_job_status(job, status, session_id=None, **kwargs):
+def update_job_status(job, status, session_id=None, masks=None, **kwargs):
     job.status = status
+    if masks:
+        job.masks = masks
+    
     job.save()
     if session_id:
         send_progress(session_id, status, job_id=job.id, **kwargs)
+    
 
 def format_output_url(file_path):
     if not file_path:
@@ -137,3 +158,72 @@ def process_job(self, job_id):
         job.refresh_from_db()
         update_job_status(job, "failed", job.session_id)
         raise
+
+
+
+
+def save_masks_as_pngs(masks, job_id):
+    os.makedirs(MASKS_DIR, exist_ok=True)
+    mask_paths = []
+
+    for i, mask_dict in enumerate(masks):
+        mask_array = np.array(mask_dict['segmentation'], dtype=np.float32)
+
+        img = PIL.Image.fromarray((mask_array * 255).astype(np.uint8))
+        img = img.convert("L")  
+
+        rgba = PIL.Image.new("RGBA", img.size, (0, 0, 0, 0))
+        rgba.putalpha(img)
+
+        mask_path = os.path.join(MASKS_DIR, f"job_{job_id}_mask_{i}.png")
+        rgba.save(mask_path)
+        mask_paths.append(format_output_url(mask_path))
+
+    return mask_paths
+
+
+@shared_task(bind=True, max_retries=3)
+def process_segmentation(self, job_id):
+    job = Job.objects.get(id=job_id)
+    files = {}
+    file_handles = []
+    job.status = "processing"
+    job.save()
+    try:
+        if job.image:
+            f = job.image.open('rb')
+            files["image"] = (os.path.basename(job.image.name), f, "image/png")
+            file_handles.append(f)
+
+        data = {"model": job.model, "job_id": job_id}
+
+        response = requests.post(
+            f"{settings.MODEL_SERVICE_URL}/auto_segmentation",
+            files=files,
+            data=data,
+            timeout=120
+        )
+
+        response.raise_for_status()  
+
+        result = response.json()
+        masks = result.get("masks")
+
+        if masks is None:
+            raise ValueError("Missing masks in response")
+        
+        mask_paths = save_masks_as_pngs(masks, job_id=job_id)
+
+        update_job_status(
+            job, 
+            "done", 
+            job.session_id, 
+            masks=mask_paths,
+        )
+        job.refresh_from_db()
+        return mask_paths
+
+    finally:
+        for f in file_handles:
+            f.close()
+

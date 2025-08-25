@@ -8,6 +8,7 @@ class Job(models.Model):
     status = models.CharField(max_length=20, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     model = models.CharField(max_length=100, default='lustify-sdxl')
+    masks = models.JSONField(null=True, blank=True)
 
     #session_id mock MVP solution (in future change this to foreign key of user id for prod)
     session_id = models.CharField(max_length=100, null=True, blank=True)

@@ -4,13 +4,14 @@ import torch
 from typing import Dict, Any
 from fastapi import HTTPException
 
-from .controlnet import ControlNet
-from .specifics.realistic_vision import RealisticVision
-from .specifics.cyberrealistic import CyberRealistic
-from .specifics.lustify_sdxl import LustifySDXL
-from .specifics.illustrious import IllustriousPony
-from .sd_inpaint_base import UnifiedInpaintModel
-from .sdxl_inpaint_base import SDXLInpaintModel
+from stable_diffusion.controlnet import ControlNet
+from stable_diffusion.specifics.realistic_vision import RealisticVision
+from stable_diffusion.specifics.cyberrealistic import CyberRealistic
+from stable_diffusion.specifics.lustify_sdxl import LustifySDXL
+from stable_diffusion.specifics.illustrious import IllustriousPony
+from stable_diffusion.sd_inpaint_base import UnifiedInpaintModel
+from stable_diffusion.sdxl_inpaint_base import SDXLInpaintModel
+from auto_segmentation.SAM import SAMSegmenter
 
 CLASS_MAP = {
     "ControlNetModelWrapper": ControlNet,
@@ -20,6 +21,8 @@ CLASS_MAP = {
     "IllustriousPonyModelWrapper": IllustriousPony,
     "SDXLInpaintModelWrapper": SDXLInpaintModel,
     "UnifiedInpaintModelWrapper": UnifiedInpaintModel,
+
+    "SamModelWrapper": SAMSegmenter,
 }
 
 
@@ -36,6 +39,7 @@ class ModelManager:
             config = yaml.safe_load(f)
 
         cls._model_map = config.get("models", {})
+        cls._auto_segmantation_map = config.get("auto_segmantation", {})
 
     @classmethod
     def list_models(cls):
@@ -87,6 +91,37 @@ class ModelManager:
                 **extra_kwargs,
             )
             cls._instances[model_name] = instance
+
+        return cls._instances[model_name]
+    
+    @classmethod
+    def get_auto_segmentation_model(cls, model_name: str):
+        if model_name not in cls._auto_segmantation_map:
+            raise ValueError(f"Unknown auto segmentation model: {model_name}")
+        
+        model_info = cls._auto_segmantation_map[model_name]
+        model_class_name = model_info["class"]
+        model_path = model_info["path"]
+        model_type = model_info["type"]
+        required_vram = model_info.get("required_vram", 8)
+
+        free_gb = cls._get_free_vram_gb()
+        if free_gb < float(required_vram):
+            models = cls._find_models_to_unload(required_vram - free_gb)
+            if models:
+                for m in models:
+                    cls.unload_model(m)
+                free_gb = cls._get_free_vram_gb()
+
+        if model_class_name not in CLASS_MAP:
+            raise ValueError(f"Unknown class: {model_class_name}")
+        model_class = CLASS_MAP[model_class_name]
+        instance = model_class(model_type=model_type)
+
+        instance.load_model(model_path)
+
+        cls._instances[model_name] = instance
+
 
         return cls._instances[model_name]
 

@@ -3,3 +3,4 @@ node_modules
 run.bat
 media
 test.py
+db.sqlite3

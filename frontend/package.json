@@ -46,9 +46,9 @@
     ]
   },
   "devDependencies": {
+    "@types/lodash": "^4.17.20",
     "@types/react-dropzone": "^4.2.2",
     "@types/react-router-dom": "^5.3.3"
   },
   "proxy": "http://localhost:8000"
-
 }

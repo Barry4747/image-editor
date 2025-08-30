@@ -2,6 +2,9 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { Stage, Layer, Image as KonvaImage, Line, Rect } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 
+import { throttle } from "lodash";
+
+
 interface MaskingCanvasProps {
   baseImage: HTMLImageElement;
   onMaskExport: (maskDataUrl: string) => void;
@@ -32,6 +35,7 @@ interface AIMask {
 const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
   const stageRef = useRef<KonvaStage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
 
   const [lines, setLines] = useState<LineData[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -109,41 +113,53 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
     return transform.point(pointer);
   };
 
-  // --- Znajdź maskę pod kursorem ---
-  const getMaskUnderCursor = (pos: { x: number; y: number } | null) => {
-    if (!pos) return null;
-
-    for (let i = aiMasks.length - 1; i >= 0; i--) {
-      const mask = aiMasks[i];
-      if (!mask.image || !mask.alphaData || !mask.width || !mask.height) continue;
-
-      // przeskaluj pozycję kursora z canvasa do rozdzielczości maski
+  // --- Znajdź wszystkie maski pod kursorem ---
+  const getMasksUnderCursor = (pos: { x: number; y: number } | null) => {
+    if (!pos || aiMasks.length === 0) return [];
+    const masks: number[] = [];
+    aiMasks.forEach((mask, i) => {
+      if (!mask.image || !mask.alphaData || !mask.width || !mask.height) return;
       const px = Math.floor((pos.x / canvasSize.width) * mask.width);
       const py = Math.floor((pos.y / canvasSize.height) * mask.height);
-
-      if (px < 0 || py < 0 || px >= mask.width || py >= mask.height) continue;
-
+      if (px < 0 || py < 0 || px >= mask.width || py >= mask.height) return;
       const alpha = mask.alphaData[(py * mask.width + px) * 4 + 3];
-      if (alpha > 10) return i;
-    }
-    return null;
+      if (alpha > 10) masks.push(i);
+    });
+    return masks;
   };
+
+  const pickSmallestMask = (masksAtCursor: number[]): number | null => {
+    if (masksAtCursor.length === 0) return null;
+    return masksAtCursor.reduce((minIdx, i) => {
+      const mask = aiMasks[i];
+      const minMask = aiMasks[minIdx];
+      if (!mask?.alphaData) return minIdx;
+      if (!minMask?.alphaData) return i;
+
+      const area = mask.alphaData.filter((_, idx) => idx % 4 === 3 && mask.alphaData![idx] > 10).length;
+      const minArea = minMask.alphaData.filter((_, idx) => idx % 4 === 3 && minMask.alphaData![idx] > 10).length;
+
+      return area < minArea ? i : minIdx;
+    }, masksAtCursor[0]!);
+  };
+
 
   // --- Obsługa kliknięcia maski ---
   const handleStageClick = (e: any) => {
+    if (aiMasks.length === 0) return;
     const stage = stageRef.current;
     if (!stage) return;
-
     const pos = getRelativePointerPosition(stage);
     if (!pos) return;
 
-    const maskIndex = getMaskUnderCursor(pos);
-    if (maskIndex === null) return;
+    const masksAtCursor = getMasksUnderCursor(pos);
+    const largestMaskIndex = pickSmallestMask(masksAtCursor);
+    if (largestMaskIndex === null) return;
 
     setSelectedMaskIndices((prev) =>
-      prev.includes(maskIndex)
-        ? prev.filter((idx) => idx !== maskIndex)
-        : [...prev, maskIndex]
+      prev.includes(largestMaskIndex)
+        ? prev.filter((idx) => idx !== largestMaskIndex)
+        : [...prev, largestMaskIndex]
     );
   };
 
@@ -154,8 +170,12 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
     const pos = getRelativePointerPosition(stage);
     if (!pos) return;
 
-    const hovered = getMaskUnderCursor(pos);
-    if (hovered !== null) return; // nie rysuj nad maską
+    const masksAtCursor = getMasksUnderCursor(pos);
+    const largestMaskIndex = pickSmallestMask(masksAtCursor);
+    if (largestMaskIndex !== null) {
+      setHoveredMaskIndex(largestMaskIndex);
+      return; // nie rysuj nad maską
+    }
 
     if (drawingMode === "free" || drawingMode === "lasso") {
       setIsDrawing(true);
@@ -181,7 +201,9 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
     const pos = getRelativePointerPosition(stage);
     if (!pos) return;
 
-    setHoveredMaskIndex(getMaskUnderCursor(pos));
+    const masksAtCursor = getMasksUnderCursor(pos);
+    const largestMaskIndex = pickSmallestMask(masksAtCursor);
+    setHoveredMaskIndex(largestMaskIndex);
 
     if (!isDrawing) return;
 
@@ -236,41 +258,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
     setIsDrawing(false);
   };
 
-  // --- Eksport rysunków (nie masek AI) ---
-  useEffect(() => {
-    if (!baseImage) return;
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = baseImage.naturalWidth;
-    tempCanvas.height = baseImage.naturalHeight;
-    const ctx = tempCanvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-    const scaleX = baseImage.naturalWidth / canvasSize.width;
-    const scaleY = baseImage.naturalHeight / canvasSize.height;
-
-    lines.forEach((line) => {
-      if (line.points.length < 2) return;
-      ctx.beginPath();
-      ctx.moveTo(line.points[0].x * scaleX, line.points[0].y * scaleY);
-      for (let i = 1; i < line.points.length; i++)
-        ctx.lineTo(line.points[i].x * scaleX, line.points[i].y * scaleY);
-      ctx.lineWidth = line.brushSize * ((scaleX + scaleY) / 2);
-      ctx.strokeStyle = line.color === "black" ? "black" : "white";
-      if (line.closed) {
-        ctx.closePath();
-        ctx.fillStyle = "black";
-        ctx.fill();
-      }
-      ctx.stroke();
-    });
-
-    const dataUrl = tempCanvas.toDataURL("image/png");
-    onMaskExport(dataUrl);
-  }, [lines, baseImage, canvasSize, onMaskExport]);
-
+  // --- Reset ---
   const resetAll = () => {
     setLines([]);
     setSelection(null);
@@ -283,6 +271,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
     setHoveredMaskIndex(null);
   };
 
+  // --- Handle AI Mask ---
   const handleAIMask = async () => {
     if (!baseImage) return;
     setAiProcessing(true);
@@ -332,68 +321,102 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
     }
   };
 
+  // --- Merge Selected Masks ---
   const mergeSelectedMasks = () => {
-  if (!baseImage) return;
-  const width = baseImage.naturalWidth;
-  const height = baseImage.naturalHeight;
-  const tempCanvas = document.createElement("canvas");
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-  const ctx = tempCanvas.getContext("2d");
-  if (!ctx) return;
+    if (!baseImage) return;
+    const width = baseImage.naturalWidth;
+    const height = baseImage.naturalHeight;
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const ctx = tempCanvas.getContext("2d");
+    if (!ctx) return;
 
-  ctx.fillStyle = "white";
-  ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, width, height);
 
-  // Tworzymy finalną maskę binarną
-  const finalMask = ctx.getImageData(0, 0, width, height);
-  const finalData = finalMask.data;
+    const finalMask = ctx.getImageData(0, 0, width, height);
+    const finalData = finalMask.data;
 
-  // Sortowanie masek po powierzchni (największa na spodzie)
-  const masksWithArea = selectedMaskIndices.map((idx) => {
-    const mask = aiMasks[idx];
-    if (!mask.alphaData || !mask.width || !mask.height) return { idx, area: 0 };
-    let area = 0;
-    for (let i = 3; i < mask.alphaData.length; i += 4) {
-      if (mask.alphaData[i] > 10) area++;
-    }
-    return { idx, area };
-  });
+    const masksWithArea = selectedMaskIndices.map((idx) => {
+      const mask = aiMasks[idx];
+      if (!mask.alphaData || !mask.width || !mask.height) return { idx, area: 0 };
+      let area = 0;
+      for (let i = 3; i < mask.alphaData.length; i += 4) {
+        if (mask.alphaData[i] > 10) area++;
+      }
+      return { idx, area };
+    });
 
-  const sortedIndices = masksWithArea.sort((a, b) => b.area - a.area).map(m => m.idx);
+    const sortedIndices = masksWithArea.sort((a, b) => b.area - a.area).map(m => m.idx);
 
-  // Iterujemy maski i nakładamy je na finalną
-  sortedIndices.forEach((index) => {
-    const mask = aiMasks[index];
-    if (!mask?.alphaData || !mask.width || !mask.height) return;
+    sortedIndices.forEach((index) => {
+      const mask = aiMasks[index];
+      if (!mask?.alphaData || !mask.width || !mask.height) return;
 
-    const scaleX = width / mask.width;
-    const scaleY = height / mask.height;
+      const scaleX = width / mask.width;
+      const scaleY = height / mask.height;
 
-    for (let y = 0; y < height; y++) {
-      const maskY = Math.floor(y / scaleY);
-      for (let x = 0; x < width; x++) {
-        const maskX = Math.floor(x / scaleX);
-        const maskIdx = (maskY * mask.width + maskX) * 4;
-        const alpha = mask.alphaData[maskIdx + 3];
-        const finalIdx = (y * width + x) * 4;
+      for (let y = 0; y < height; y++) {
+        const maskY = Math.floor(y / scaleY);
+        for (let x = 0; x < width; x++) {
+          const maskX = Math.floor(x / scaleX);
+          const maskIdx = (maskY * mask.width + maskX) * 4;
+          const alpha = mask.alphaData[maskIdx + 3];
+          const finalIdx = (y * width + x) * 4;
 
-        // Nadpisujemy tylko jeśli piksel maski nieprzezroczysty
-        if (alpha > 10) {
-          finalData[finalIdx + 0] = 0; // black
-          finalData[finalIdx + 1] = 0;
-          finalData[finalIdx + 2] = 0;
-          finalData[finalIdx + 3] = 255; // alpha
+          if (alpha > 10) {
+            finalData[finalIdx + 0] = 0;
+            finalData[finalIdx + 1] = 0;
+            finalData[finalIdx + 2] = 0;
+            finalData[finalIdx + 3] = 255;
+          }
         }
       }
-    }
-  });
+    });
 
-  ctx.putImageData(finalMask, 0, 0);
-  onMaskExport(tempCanvas.toDataURL("image/png"));
-  setSelectedMaskIndices([]);
-};
+    ctx.putImageData(finalMask, 0, 0);
+    onMaskExport(tempCanvas.toDataURL("image/png"));
+    setSelectedMaskIndices([]);
+  };
 
+  // --- Eksport rysunków ---
+  useEffect(() => {
+    if (!baseImage) return;
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = baseImage.naturalWidth;
+    tempCanvas.height = baseImage.naturalHeight;
+    const ctx = tempCanvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+    const scaleX = baseImage.naturalWidth / canvasSize.width;
+    const scaleY = baseImage.naturalHeight / canvasSize.height;
+
+    lines.forEach((line) => {
+      if (line.points.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(line.points[0].x * scaleX, line.points[0].y * scaleY);
+      for (let i = 1; i < line.points.length; i++)
+        ctx.lineTo(line.points[i].x * scaleX, line.points[i].y * scaleY);
+      ctx.lineWidth = line.brushSize * ((scaleX + scaleY) / 2);
+      ctx.strokeStyle = line.color === "black" ? "black" : "white";
+      if (line.closed) {
+        ctx.closePath();
+        ctx.fillStyle = "black";
+        ctx.fill();
+      }
+      ctx.stroke();
+    });
+
+    const dataUrl = tempCanvas.toDataURL("image/png");
+    onMaskExport(dataUrl);
+  }, [lines, baseImage, canvasSize, onMaskExport]);
+
+
+    const throttledMouseMove = throttle(handleMouseMove, 30);
 
   // --- Render ---
   return (
@@ -474,7 +497,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
           width={canvasSize.width}
           height={canvasSize.height}
           onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
+          onMouseMove={throttledMouseMove}
           onMouseUp={handleMouseUp}
           onClick={handleStageClick}
           style={{

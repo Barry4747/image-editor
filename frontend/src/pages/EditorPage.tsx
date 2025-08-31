@@ -14,9 +14,20 @@ const EditorPage = () => {
   const [maskData, setMaskData] = useState('');
   const [sessionId, setSessionId] = useState('dummy-session-id');
 
-  // Nowe stany dla modeli
+  // Models
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
+
+  // Advanced settings
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [strength, setStrength] = useState(0.75);
+  const [guidanceScale, setGuidanceScale] = useState(9.5);
+  const [steps, setSteps] = useState(40);
+  const [passes, setPasses] = useState(4);
+  const [seed, setSeed] = useState<string>(''); // empty string = None
+  const [finishModels, setFinishModels] = useState<string[]>([]);
+  const [selectedFinishModel, setSelectedFinishModel] = useState<string>('None'); // default None
+
 
   // Load image from uploaded file
   useEffect(() => {
@@ -49,7 +60,7 @@ const EditorPage = () => {
     };
   }, [state, navigate]);
 
-  // Pobieranie modeli z API
+  // Fetch models
   useEffect(() => {
     const fetchModels = async () => {
       try {
@@ -57,7 +68,9 @@ const EditorPage = () => {
         if (!res.ok) throw new Error('Failed to fetch models');
         const data = await res.json();
         setModels(data.models || []);
-        if (data.models?.length > 0) setSelectedModel(data.models[0]); // domyślny pierwszy
+        if (data.models?.length > 0) setSelectedModel(data.models[0]);
+        setFinishModels(['None', ...(data.models || [])]); 
+        setSelectedFinishModel('None');
       } catch (err) {
         console.error(err);
       }
@@ -84,6 +97,13 @@ const EditorPage = () => {
       formData.append('mask', maskFile);
       formData.append('prompt', prompt);
       formData.append('model', selectedModel);
+
+      if (strength != null) formData.append('strength', strength.toString());
+      if (guidanceScale != null) formData.append('guidance_scale', guidanceScale.toString());
+      if (steps != null) formData.append('steps', steps.toString());
+      if (passes != null) formData.append('passes', passes.toString());
+      if (seed.trim() !== '') formData.append('seed', seed);
+      if (selectedFinishModel !== 'None') formData.append('finish_model', selectedFinishModel);
 
       const response = await fetch('/jobs', {
         method: 'POST',
@@ -142,6 +162,83 @@ const EditorPage = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Advanced Settings */}
+          <div>
+            <button
+              className="text-blue-600 underline mb-2"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+            >
+              {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+            </button>
+
+            {showAdvanced && (
+              <div className="space-y-2 border p-4 rounded bg-gray-50">
+                <div>
+                  <label>Strength:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={strength}
+                    onChange={(e) => setStrength(parseFloat(e.target.value))}
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+                <div>
+                  <label>Guidance Scale:</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={guidanceScale}
+                    onChange={(e) => setGuidanceScale(parseFloat(e.target.value))}
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+                <div>
+                  <label>Steps:</label>
+                  <input
+                    type="number"
+                    value={steps}
+                    onChange={(e) => setSteps(parseInt(e.target.value))}
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+                <div>
+                  <label>Passes:</label>
+                  <input
+                    type="number"
+                    value={passes}
+                    onChange={(e) => setPasses(parseInt(e.target.value))}
+                    className="w-full p-1 border rounded"
+                  />
+                </div>
+                <div>
+                  <label>Seed (optional):</label>
+                  <input
+                    type="text"
+                    value={seed}
+                    onChange={(e) => setSeed(e.target.value)}
+                    className="w-full p-1 border rounded"
+                    placeholder="Leave empty for random seed"
+                  />
+                </div>
+                <div>
+                  <label>Finish Model:</label>
+                  <select
+                    value={selectedFinishModel}
+                    onChange={(e) => setSelectedFinishModel(e.target.value)}
+                    className="w-full p-1 border rounded"
+                  >
+                    {finishModels.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
 
           <button

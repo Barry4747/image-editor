@@ -71,7 +71,7 @@ def format_output_url(file_path):
     raise ValueError(f"Path {file_path} is outside MEDIA_ROOT")
 
 @shared_task(bind=True, max_retries=3)
-def process_job(self, job_id):
+def process_job(self, job_id, strength=None, guidance_scale=None, steps=None, passes=None, seed=None, finish_model=None):
     try:
         job = Job.objects.get(id=job_id)
         logger.info(f"Starting processing for job {job_id}")
@@ -103,7 +103,11 @@ def process_job(self, job_id):
 
             send_progress(job.session_id, "progress", job_id=job.id, progress=20)
 
-            data = {"prompt": job.prompt, "job_id": job.id, "model": job.model}
+            data = {"prompt": job.prompt, "job_id": job.id, 
+                    "model": job.model, "strength": strength, "guidance_scale": guidance_scale, "steps": steps, "passes": passes, "seed": seed, "finish_model": finish_model}
+            
+            data = {k: v for k, v in data.items() if v is not None}
+
             response = requests.post(
                 f"{settings.MODEL_SERVICE_URL}/process-image",
                 files=files,

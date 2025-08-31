@@ -18,24 +18,42 @@ class CreateJobView(views.APIView):
 
         image = request.FILES.get('image')
         mask = request.FILES.get('mask')
-        prompt = request.data.get('prompt', '')
-        model = request.data.get('model', 'lustify-sdxl')
-
         if not image:
             return Response({"error": "Image file is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        prompt = request.data.get('prompt', '')
+        model = request.data.get('model', 'lustify-sdxl')
+        strength = float(request.data.get('strength', 0.75))
+        guidance_scale = float(request.data.get('guidance_scale', 9.5))
+        steps = int(request.data.get('steps', 40))
+        passes = int(request.data.get('passes', 4))
+        seed = request.data.get('seed')
+        finish_model = request.data.get('finish_model', 'lustify-sdxl')
 
         job = Job.objects.create(
             session_id=session_id,
             image=image,
             mask=mask,
             prompt=prompt,
-            model=model
+            model=model,
         )
+
         logging.info(f"Created job with ID: {job.id} for session: {session_id}")
-        process_job.delay(job.id)
+
+        process_job.delay(
+            job.id,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            steps=steps,
+            passes=passes,
+            seed=seed,
+            finish_model=finish_model
+        )
+
         logging.info(f"Started processing job with ID: {job.id}")
 
         return Response({"job_id": job.id, "status": job.status})
+
     
 
 @api_view(['POST'])

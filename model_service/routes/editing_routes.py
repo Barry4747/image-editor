@@ -18,6 +18,8 @@ async def process_image(
     guidance_scale: float = Form(9.5),
     steps: int = Form(40),
     passes: int = Form(4),
+    seed: int = Form(None),
+    finish_model: str = Form("lustify-sdxl"),
 ):
     input_img = Image.open(io.BytesIO(await image.read())).convert("RGB")
     mask_img = None
@@ -33,7 +35,9 @@ async def process_image(
         strength=strength,
         guidance_scale=guidance_scale,
         steps=steps,
+        seed=seed,
         passes=passes,
+        finish_model=finish_model,
     )
 
     return JSONResponse({"output_url": output_path})

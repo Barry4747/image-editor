@@ -47,6 +47,20 @@ models:
     vae: C:\Users\Bartek\AImodels\VAE\sdxl
     required_vram: 10
 
+  juggernaut-xl:
+    class: SDXLInpaintModelWrapper
+    path: C:\Users\Bartek\AImodels\ImageGeneration\Checkpoints\juggernautXL_ragnarokBy.safetensors
+    vae: C:\Users\Bartek\AImodels\VAE\sdxl
+    required_vram: 10
+    class_t2i: SDXLTextToImageModelWrapper
+
+  epicrealism-xl:
+    class: SDXLInpaintModelWrapper
+    path: C:\Users\Bartek\AImodels\ImageGeneration\Checkpoints\epicrealismXL_vxviiCrystalclear.safetensors
+    vae: C:\Users\Bartek\AImodels\VAE\sdxl
+    required_vram: 10
+    class_t2i: SDXLTextToImageModelWrapper
+
 auto_segmantation:
   sam-vit-h:
     class: SamModelWrapper

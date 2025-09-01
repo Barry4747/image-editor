@@ -1,4 +1,3 @@
-
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Stage, Layer, Image as KonvaImage, Line, Rect } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
@@ -44,20 +43,60 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
   const [drawingMode, setDrawingMode] = useState<"free" | "lasso" | "rectangle">("free");
   const [selection, setSelection] = useState<Selection>(null);
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
-  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
 
   const [aiMasks, setAiMasks] = useState<AIMask[]>([]);
   const [hoveredMaskIndex, setHoveredMaskIndex] = useState<number | null>(null);
   const [selectedMaskIndices, setSelectedMaskIndices] = useState<number[]>([]);
   const [aiProcessing, setAiProcessing] = useState(false);
 
-  // --- Dopasowanie Stage do obrazu ---
+  // --- Handle container resize and image loading ---
   useEffect(() => {
     if (!baseImage) return;
-    setCanvasSize({ width: baseImage.naturalWidth, height: baseImage.naturalHeight });
+    
+    // Calculate the optimal canvas size based on container and image dimensions
+    const updateCanvasSize = () => {
+      if (!containerRef.current || !baseImage) return;
+      
+      const containerWidth = containerRef.current.clientWidth;
+      const containerHeight = containerRef.current.clientHeight || 600;
+      
+      // Calculate aspect ratios
+      const imageRatio = baseImage.naturalWidth / baseImage.naturalHeight;
+      const containerRatio = containerWidth / containerHeight;
+      
+      let width, height;
+      
+      if (imageRatio > containerRatio) {
+        // Image is wider than container
+        width = Math.min(containerWidth, baseImage.naturalWidth);
+        height = width / imageRatio;
+      } else {
+        // Image is taller than container
+        height = Math.min(containerHeight, baseImage.naturalHeight);
+        width = height * imageRatio;
+      }
+      
+      // Ensure minimum dimensions
+      width = Math.max(width, 200);
+      height = Math.max(height, 150);
+      
+      setCanvasSize({ width, height });
+    };
+    
+    // Initial update
+    updateCanvasSize();
+    
+    // Update on window resize
+    const handleResize = throttle(updateCanvasSize, 100);
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
   }, [baseImage]);
 
-  // --- Preprocess maski ---
+  // --- Preprocess mask ---
   const preprocessMask = useCallback(async (mask: AIMask): Promise<AIMask> => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -83,7 +122,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     };
   }, []);
 
-  // --- Load masek AI ---
+  // --- Load AI masks ---
   useEffect(() => {
     const loadMasks = async () => {
       const masksToLoad = aiMasks.filter((m) => !m.image);
@@ -104,7 +143,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     loadMasks();
   }, [aiMasks, preprocessMask]);
 
-  // --- Pozycja kursora względem stage ---
+  // --- Get relative pointer position ---
   const getRelativePointerPosition = (stage: KonvaStage) => {
     const pointer = stage.getPointerPosition();
     if (!pointer) return null;
@@ -113,14 +152,17 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     return transform.point(pointer);
   };
 
-  // --- Znajdź wszystkie maski pod kursorem ---
+  // --- Find masks under cursor ---
   const getMasksUnderCursor = (pos: { x: number; y: number } | null) => {
     if (!pos || aiMasks.length === 0) return [];
     const masks: number[] = [];
     aiMasks.forEach((mask, i) => {
       if (!mask.image || !mask.alphaData || !mask.width || !mask.height) return;
+      
+      // Scale position to mask coordinates
       const px = Math.floor((pos.x / canvasSize.width) * mask.width);
       const py = Math.floor((pos.y / canvasSize.height) * mask.height);
+      
       if (px < 0 || py < 0 || px >= mask.width || py >= mask.height) return;
       const alpha = mask.alphaData[(py * mask.width + px) * 4 + 3];
       if (alpha > 10) masks.push(i);
@@ -143,7 +185,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     }, masksAtCursor[0]!);
   };
 
-  // --- Obsługa kliknięcia maski ---
+  // --- Handle stage click ---
   const handleStageClick = (e: any) => {
     if (aiMasks.length === 0) return;
     const stage = stageRef.current;
@@ -162,7 +204,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     );
   };
 
-  // --- Rysowanie ---
+  // --- Handle mouse down ---
   const handleMouseDown = (e: any) => {
     const stage = e.target.getStage();
     if (!stage) return;
@@ -173,7 +215,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     const largestMaskIndex = pickSmallestMask(masksAtCursor);
     if (largestMaskIndex !== null) {
       setHoveredMaskIndex(largestMaskIndex);
-      return; // nie rysuj nad maską
+      return; // don't draw over mask
     }
 
     if (drawingMode === "free" || drawingMode === "lasso") {
@@ -194,6 +236,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     }
   };
 
+  // --- Handle mouse move ---
   const handleMouseMove = (e: any) => {
     const stage = e.target.getStage();
     if (!stage) return;
@@ -226,6 +269,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     }
   };
 
+  // --- Handle mouse up ---
   const handleMouseUp = () => {
     if (!isDrawing) return;
 
@@ -257,7 +301,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     setIsDrawing(false);
   };
 
-  // --- Reset ---
+  // --- Reset all ---
   const resetAll = () => {
     setLines([]);
     setSelection(null);
@@ -320,7 +364,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     }
   };
 
-  // --- Merge Selected Masks ---
+  // --- Merge selected masks ---
   const mergeSelectedMasks = () => {
     if (!baseImage) return;
     const width = baseImage.naturalWidth;
@@ -337,6 +381,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     const finalMask = ctx.getImageData(0, 0, width, height);
     const finalData = finalMask.data;
 
+    // Sort masks by area (largest first)
     const masksWithArea = selectedMaskIndices.map((idx) => {
       const mask = aiMasks[idx];
       if (!mask.alphaData || !mask.width || !mask.height) return { idx, area: 0 };
@@ -349,13 +394,16 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
 
     const sortedIndices = masksWithArea.sort((a, b) => b.area - a.area).map(m => m.idx);
 
+    // Apply masks in order of size
     sortedIndices.forEach((index) => {
       const mask = aiMasks[index];
       if (!mask?.alphaData || !mask.width || !mask.height) return;
 
+      // Calculate scaling factors
       const scaleX = width / mask.width;
       const scaleY = height / mask.height;
 
+      // Sample mask data and apply to final mask
       for (let y = 0; y < height; y++) {
         const maskY = Math.floor(y / scaleY);
         for (let x = 0; x < width; x++) {
@@ -365,10 +413,10 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
           const finalIdx = (y * width + x) * 4;
 
           if (alpha > 10) {
-            finalData[finalIdx + 0] = 0;
-            finalData[finalIdx + 1] = 0;
-            finalData[finalIdx + 2] = 0;
-            finalData[finalIdx + 3] = 255;
+            finalData[finalIdx + 0] = 0;  // R
+            finalData[finalIdx + 1] = 0;  // G
+            finalData[finalIdx + 2] = 0;  // B
+            finalData[finalIdx + 3] = 255;  // A
           }
         }
       }
@@ -379,37 +427,50 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
     setSelectedMaskIndices([]);
   };
 
-  // --- Eksport rysunków ---
+  // --- Export drawings ---
   useEffect(() => {
-    if (!baseImage) return;
+    if (!baseImage || canvasSize.width === 0 || canvasSize.height === 0) return;
+    
     const tempCanvas = document.createElement("canvas");
     tempCanvas.width = baseImage.naturalWidth;
     tempCanvas.height = baseImage.naturalHeight;
     const ctx = tempCanvas.getContext("2d");
     if (!ctx) return;
 
+    // Start with white background
     ctx.fillStyle = "white";
     ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
 
+    // Calculate scale factors for converting from canvas coordinates to image coordinates
     const scaleX = baseImage.naturalWidth / canvasSize.width;
     const scaleY = baseImage.naturalHeight / canvasSize.height;
 
+    // Draw all lines
     lines.forEach((line) => {
       if (line.points.length < 2) return;
+      
       ctx.beginPath();
       ctx.moveTo(line.points[0].x * scaleX, line.points[0].y * scaleY);
-      for (let i = 1; i < line.points.length; i++)
+      
+      for (let i = 1; i < line.points.length; i++) {
         ctx.lineTo(line.points[i].x * scaleX, line.points[i].y * scaleY);
-      ctx.lineWidth = line.brushSize * ((scaleX + scaleY) / 2);
+      }
+      
+      // Adjust line width based on scale
+      const avgScale = (scaleX + scaleY) / 2;
+      ctx.lineWidth = line.brushSize * avgScale;
       ctx.strokeStyle = line.color === "black" ? "black" : "white";
+      
       if (line.closed) {
         ctx.closePath();
         ctx.fillStyle = "black";
         ctx.fill();
       }
+      
       ctx.stroke();
     });
 
+    // Export the result
     const dataUrl = tempCanvas.toDataURL("image/png");
     onMaskExport(dataUrl);
   }, [lines, baseImage, canvasSize, onMaskExport]);

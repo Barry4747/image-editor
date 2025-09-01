@@ -13,6 +13,7 @@ from stable_diffusion.sd_inpaint_base import UnifiedInpaintModel
 from stable_diffusion.sdxl_inpaint_base import SDXLInpaintModel
 from auto_segmentation.SAM import SAMSegmenter
 from upscalers.realesrganupscaler import RealESRGANUpscaler
+from stable_diffusion.sdxl_t2i_base import SDXLTextToImageModel
 
 CLASS_MAP = {
     "ControlNetModelWrapper": ControlNet,
@@ -26,11 +27,13 @@ CLASS_MAP = {
     "RealESRGANUpscalerWrapper": RealESRGANUpscaler,
     
     "SamModelWrapper": SAMSegmenter,
+    "SDXLTextToImageModelWrapper": SDXLTextToImageModel,
 }
 
 
 class ModelManager:
     _instances: Dict[str, Any] = {}
+    _is_t2i = False
     _model_map: Dict[str, Any] = {}
 
     @classmethod
@@ -63,13 +66,18 @@ class ModelManager:
         return free / (1024**3)  
 
     @classmethod
-    def get_model(cls, model_name: str):
+    def get_model(cls, model_name: str, t2i=False):
         if model_name not in cls._model_map:
             raise ValueError(f"Unknown model: {model_name}")
 
-        if model_name not in cls._instances:
+        if model_name not in cls._instances or cls._is_t2i is not t2i :
             model_info = cls._model_map[model_name]
-            model_class_name = model_info["class"]
+            if t2i and model_info["class_t2i"]:
+                model_class_name = model_info["class_t2i"]
+            elif t2i:
+                raise ValueError(f"Model does not support text to image pipeline: {model_name}")
+            else:
+                model_class_name = model_info["class"]
             model_path = model_info["path"]
 
             required_vram = model_info.get("required_vram")

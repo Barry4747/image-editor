@@ -85,7 +85,7 @@ def save_masks_as_pngs(masks, job_id):
 
 @shared_task(bind=True, max_retries=3)
 def process_job(
-    self, job_id, strength=None, guidance_scale=None, steps=None, passes=None, seed=None, finish_model=None
+    self, job_id
 ):
     try:
         job = Job.objects.get(id=job_id)
@@ -120,17 +120,16 @@ def process_job(
 
             send_progress(job.session_id, "progress", job_id=job.id, progress=20)
 
-            # dane dla modelu
             data = {
                 "prompt": job.prompt,
                 "job_id": job.id,
                 "model": job.model,
-                "strength": strength,
-                "guidance_scale": guidance_scale,
-                "steps": steps,
-                "passes": passes,
-                "seed": seed,
-                "finish_model": finish_model,
+                "strength": job.strength,
+                "guidance_scale": job.guidance_scale,
+                "steps": job.steps,
+                "passes": job.passes,
+                "seed": job.seed,
+                "finish_model": job.finish_model,
             }
             data = {k: v for k, v in data.items() if v is not None}
 
@@ -157,9 +156,8 @@ def process_job(
             job.output.name = relative_path
             job.save(update_fields=["output"])
 
-            # teraz status upscaling
             logger.info(f"Image processed for job {job_id}, starting upscaling...")
-            send_progress(job.session_id, "upscaling", job_id=job.id, progress=80)
+            send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1))
 
             output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)
             
@@ -167,12 +165,12 @@ def process_job(
                 logger.error(f"Output file not found: {output_image_path}")
                 raise FileNotFoundError("Output file not found for upscaling.")
 
-            # upscale request
             with open(output_image_path, 'rb') as f_upscale:
                 upscale_files = {
                     'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
                 }
                 upscale_data = {
+                    "model": job.upscale_model,
                     "scale": job.scale or 4,
                 }
                 upscale_response = requests.post(
@@ -202,7 +200,7 @@ def process_job(
                 job,
                 "done",
                 job.session_id,
-                output_url=upscaled_output_url,
+                preview_url=upscaled_output_url,
                 progress=100,
             )
             send_progress(job.session_id, "done", job_id=job.id, progress=100)

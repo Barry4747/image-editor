@@ -6,6 +6,7 @@ import io
 from dotenv import load_dotenv
 import os
 import uuid
+from services.editing_services import convert_system_path_to_url
 
 load_dotenv()
 
@@ -34,4 +35,4 @@ async def upscale_image(
     os.makedirs(MEDIA_ROOT, exist_ok=True)
 
     upscaled.save(output_path)
-    return {"status": "success", "output_url": output_path}
+    return {"status": "success", "output_url": convert_system_path_to_url(output_path)}

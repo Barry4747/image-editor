@@ -113,7 +113,7 @@ def process_image_file(
         output_path = os.path.join(MEDIA_ROOT, f"output_{job_id}_iter{i+1}.png")
         current_img.save(output_path)
 
-        notify_progress(job_id, (i+1)/passes, convert_system_path_to_url(output_path))
+        notify_progress(job_id, (i+1)/(passes+1), convert_system_path_to_url(output_path))
 
     return output_path
 

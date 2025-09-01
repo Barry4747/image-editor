@@ -174,9 +174,15 @@ class ModelManager:
     @classmethod
     def _find_models_to_unload(cls, required_vram: float) -> list:
         """Finds models to unload to free up the required VRAM."""
+
+        combined_map = {}
+        combined_map.update(cls._model_map)
+        combined_map.update(cls._auto_segmantation_map)
+        combined_map.update(cls._upscaler_map)
+
         sorted_models = sorted(
             cls._instances.items(),
-            key=lambda item: cls._model_map[item[0]].get("required_vram", 10),
+            key=lambda item: combined_map.get(item[0], {}).get("required_vram", 10),
             reverse=True
         )
 
@@ -184,7 +190,7 @@ class ModelManager:
         freed_vram = 0.0
 
         for model_name, instance in sorted_models:
-            model_info = cls._model_map[model_name]
+            model_info = combined_map.get(model_name, {})
             model_vram = model_info.get("required_vram", 10)
             to_unload.append(model_name)
             freed_vram += model_vram

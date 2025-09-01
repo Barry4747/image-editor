@@ -14,7 +14,7 @@ interface ProgressEvent {
 export default function JobProgressPage() {
   const { jobId } = useParams();
   const [progress, setProgress] = useState<number>(0);
-  const [status, setStatus] = useState<'created' | 'processing' | 'done'>('created');
+  const [status, setStatus] = useState<'created' | 'processing' | 'upscaling' | 'done'>('created');
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,10 +36,16 @@ export default function JobProgressPage() {
           if (data.progress !== undefined) setProgress(data.progress*100);
           if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
           break;
-
+        
+        case 'upscaling':
+          setStatus('upscaling');
+          if (data.progress !== undefined) setProgress(data.progress*100);
+          if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
+          break;
         case 'done':
           setStatus('done');
           setProgress(100);
+          console.log(data)
           if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
           break;
 

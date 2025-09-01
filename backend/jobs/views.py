@@ -30,24 +30,28 @@ class CreateJobView(views.APIView):
         seed = request.data.get('seed')
         finish_model = request.data.get('finish_model', None)
 
+        # upscaler
+        scale = request.data.get('scale', 4)
+        upscaler_model = request.data.get('upscaler_model', None)
         job = Job.objects.create(
             session_id=session_id,
             image=image,
             mask=mask,
             prompt=prompt,
             model=model,
-        )
-
-        logging.info(f"Created job with ID: {job.id} for session: {session_id}")
-
-        process_job.delay(
-            job.id,
             strength=strength,
             guidance_scale=guidance_scale,
             steps=steps,
             passes=passes,
             seed=seed,
-            finish_model=finish_model
+            finish_model=finish_model,
+            scale=scale
+        )
+
+        logging.info(f"Created job with ID: {job.id} for session: {session_id}")
+
+        process_job.delay(
+            job.id
         )
 
         logging.info(f"Started processing job with ID: {job.id}")

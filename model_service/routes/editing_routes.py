@@ -19,7 +19,7 @@ async def process_image(
     steps: int = Form(40),
     passes: int = Form(4),
     seed: int = Form(None),
-    finish_model: str = Form("lustify-sdxl"),
+    finish_model: str = Form(None),
 ):
     input_img = Image.open(io.BytesIO(await image.read())).convert("RGB")
     mask_img = None

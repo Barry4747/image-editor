@@ -12,6 +12,7 @@ from stable_diffusion.specifics.illustrious import IllustriousPony
 from stable_diffusion.sd_inpaint_base import UnifiedInpaintModel
 from stable_diffusion.sdxl_inpaint_base import SDXLInpaintModel
 from auto_segmentation.SAM import SAMSegmenter
+from upscalers.realesrganupscaler import RealESRGANUpscaler
 
 CLASS_MAP = {
     "ControlNetModelWrapper": ControlNet,
@@ -21,7 +22,7 @@ CLASS_MAP = {
     "IllustriousPonyModelWrapper": IllustriousPony,
     "SDXLInpaintModelWrapper": SDXLInpaintModel,
     "UnifiedInpaintModelWrapper": UnifiedInpaintModel,
-
+    "RealESRGANUpscalerWrapper": RealESRGANUpscaler,
     "SamModelWrapper": SAMSegmenter,
 }
 
@@ -40,6 +41,7 @@ class ModelManager:
 
         cls._model_map = config.get("models", {})
         cls._auto_segmantation_map = config.get("auto_segmantation", {})
+        cls._upscaler_map = config.get("upscalers", {})
 
     @classmethod
     def list_models(cls):
@@ -119,6 +121,37 @@ class ModelManager:
         instance = model_class(model_type=model_type)
 
         instance.load_model(model_path)
+
+        cls._instances[model_name] = instance
+
+
+        return cls._instances[model_name]
+    
+
+    @classmethod
+    def get_upscaler(cls, model_name: str):
+        if model_name not in cls._upscaler_map:
+            raise ValueError(f"Unknown upscaler: {model_name}")
+        
+        model_info = cls._upscaler_map[model_name]
+        model_class_name = model_info["class"]
+        model_path = model_info["path"]
+        required_vram = model_info.get("required_vram", 8)
+
+        free_gb = cls._get_free_vram_gb()
+        if free_gb < float(required_vram):
+            models = cls._find_models_to_unload(required_vram - free_gb)
+            if models:
+                for m in models:
+                    cls.unload_model(m)
+                free_gb = cls._get_free_vram_gb()
+
+        if model_class_name not in CLASS_MAP:
+            raise ValueError(f"Unknown class: {model_class_name}")
+        model_class = CLASS_MAP[model_class_name]
+        instance = model_class()
+
+        instance.load_model(model_path, model_name)
 
         cls._instances[model_name] = instance
 

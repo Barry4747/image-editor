@@ -1,3 +1,6 @@
+# for every type of configuration there are obligatory info to be passed. It is: class (which is the name of the class that is suitable for the model (must be in the CLASS_MAP)), 
+# path, and it is suitable to add required_vram,  
+
 models:
   sd1.5-controlnet-canny:
     class: ControlNetModelWrapper
@@ -50,3 +53,12 @@ auto_segmantation:
     type: vit_h
     path: C:/Users/Bartek/AImodels/SAM/sam_vit_h_4b8939.pth
     required_vram: 8
+
+upscalers:
+  realesrgan-x4plus:
+    class: RealESRGANUpscalerWrapper
+    path: C:\Users\Bartek\AImodels\Upscalers\RealESRGAN_x4plus.pth
+
+  realesrgan-x4plus_anime_6B:
+    class: RealESRGANUpscalerWrapper
+    path: C:\Users\Bartek\AImodels\Upscalers\RealESRGAN_x4plus_anime_6B.pth

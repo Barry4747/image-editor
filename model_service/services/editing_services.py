@@ -50,9 +50,12 @@ def process_image_file(
     steps: int,
     seed: int = None,
     passes: int = 4,
-    finish_model: str = "illustrious-pony",
+    finish_model: str = None,
 ) -> str:
     os.makedirs(MEDIA_ROOT, exist_ok=True)
+
+    if not finish_model:
+        finish_model = model 
 
     output_path = os.path.join(MEDIA_ROOT, f"output_{job_id}_iter{0}.png")
     input_img.save(output_path)

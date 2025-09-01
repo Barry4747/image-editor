@@ -28,7 +28,7 @@ class CreateJobView(views.APIView):
         steps = int(request.data.get('steps', 40))
         passes = int(request.data.get('passes', 4))
         seed = request.data.get('seed')
-        finish_model = request.data.get('finish_model', 'lustify-sdxl')
+        finish_model = request.data.get('finish_model', None)
 
         job = Job.objects.create(
             session_id=session_id,

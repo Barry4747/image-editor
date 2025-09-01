@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routes import editing_routes, auto_segmentation
+from routes import editing_routes, auto_segmentation, upscaler_routes
 from services.registry import ModelManager
 
 app = FastAPI()
@@ -15,3 +15,4 @@ async def health_check():
 
 app.include_router(editing_routes.router)
 app.include_router(auto_segmentation.router)
+app.include_router(upscaler_routes.router)

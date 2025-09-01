@@ -12,9 +12,7 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-import os
 from dotenv import load_dotenv
-
 
 load_dotenv()
 
@@ -22,9 +20,6 @@ BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "media")
 MEDIA_ROOT = os.path.join(BASE_MEDIA_ROOT, "outputs")
 MEDIA_URL = "/media/"
 MASKS_DIR = os.path.join(MEDIA_ROOT, "masks")
-
-
-
 
 
 def send_progress(session_id, event_type, **kwargs):
@@ -40,6 +35,7 @@ def send_progress(session_id, event_type, **kwargs):
         )
     except Exception as e:
         logger.error(f"Failed to send progress update: {str(e)}")
+
 
 def update_job_status(job, status, session_id=None, masks=None, **kwargs):
     job.status = status
@@ -70,8 +66,27 @@ def format_output_url(file_path):
     
     raise ValueError(f"Path {file_path} is outside MEDIA_ROOT")
 
+
+def save_masks_as_pngs(masks, job_id):
+    os.makedirs(MASKS_DIR, exist_ok=True)
+    mask_paths = []
+
+    for i, mask_dict in enumerate(masks):
+        mask_array = np.array(mask_dict['segmentation'], dtype=np.float32)
+        img = PIL.Image.fromarray((mask_array * 255).astype(np.uint8))
+        img = img.convert("L")  
+        rgba = PIL.Image.new("RGBA", img.size, (0, 0, 0, 0))
+        rgba.putalpha(img)
+        mask_path = os.path.join(MASKS_DIR, f"job_{job_id}_mask_{i}.png")
+        rgba.save(mask_path)
+        mask_paths.append(format_output_url(mask_path))
+    return mask_paths
+
+
 @shared_task(bind=True, max_retries=3)
-def process_job(self, job_id, strength=None, guidance_scale=None, steps=None, passes=None, seed=None, finish_model=None):
+def process_job(
+    self, job_id, strength=None, guidance_scale=None, steps=None, passes=None, seed=None, finish_model=None
+):
     try:
         job = Job.objects.get(id=job_id)
         logger.info(f"Starting processing for job {job_id}")
@@ -83,6 +98,7 @@ def process_job(self, job_id, strength=None, guidance_scale=None, steps=None, pa
         file_handles = []
         
         try:
+            # przygotowanie input image
             if job.image:
                 try:
                     f = job.image.open('rb')
@@ -92,6 +108,7 @@ def process_job(self, job_id, strength=None, guidance_scale=None, steps=None, pa
                     logger.error(f"Failed to open image file: {str(e)}")
                     raise
 
+            # przygotowanie mask
             if job.mask:
                 try:
                     f = job.mask.open('rb')
@@ -103,40 +120,93 @@ def process_job(self, job_id, strength=None, guidance_scale=None, steps=None, pa
 
             send_progress(job.session_id, "progress", job_id=job.id, progress=20)
 
-            data = {"prompt": job.prompt, "job_id": job.id, 
-                    "model": job.model, "strength": strength, "guidance_scale": guidance_scale, "steps": steps, "passes": passes, "seed": seed, "finish_model": finish_model}
-            
+            # dane dla modelu
+            data = {
+                "prompt": job.prompt,
+                "job_id": job.id,
+                "model": job.model,
+                "strength": strength,
+                "guidance_scale": guidance_scale,
+                "steps": steps,
+                "passes": passes,
+                "seed": seed,
+                "finish_model": finish_model,
+            }
             data = {k: v for k, v in data.items() if v is not None}
 
             response = requests.post(
                 f"{settings.MODEL_SERVICE_URL}/process-image",
                 files=files,
                 data=data,
-                timeout=120
+                timeout=120,
             )
             
-            if response.status_code == 200:
-                result = response.json()
-                output_url = result.get("output_url")
-                
-                if output_url:
-                    formatted_url = format_output_url(output_url)
-                    relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")
-                    job.output.name = relative_path
-                    
-                    update_job_status(
-                        job, 
-                        "done", 
-                        job.session_id, 
-                        output_url=formatted_url,
-                        progress=100
-                    )
-                else:
-                    raise ValueError("Missing output_url in response")
-            else:
-                error_msg = f"Model error: {response.status_code}"
+            if response.status_code != 200:
+                error_msg = f"Model error: {response.status_code} {response.text}"
                 logger.error(error_msg)
                 raise requests.HTTPError(error_msg)
+
+            result = response.json()
+            output_url = result.get("output_url")
+            
+            if not output_url:
+                raise ValueError("Missing output_url in response")
+
+            formatted_url = format_output_url(output_url)
+            relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")
+            job.output.name = relative_path
+            job.save(update_fields=["output"])
+
+            # teraz status upscaling
+            logger.info(f"Image processed for job {job_id}, starting upscaling...")
+            send_progress(job.session_id, "upscaling", job_id=job.id, progress=80)
+
+            output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)
+            
+            if not os.path.exists(output_image_path):
+                logger.error(f"Output file not found: {output_image_path}")
+                raise FileNotFoundError("Output file not found for upscaling.")
+
+            # upscale request
+            with open(output_image_path, 'rb') as f_upscale:
+                upscale_files = {
+                    'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
+                }
+                upscale_data = {
+                    "scale": job.scale or 4,
+                }
+                upscale_response = requests.post(
+                    f"{settings.MODEL_SERVICE_URL}/upscale",
+                    files=upscale_files,
+                    data=upscale_data,
+                    timeout=300,
+                )
+                if upscale_response.status_code != 200:
+                    logger.error(f"Upscale error {upscale_response.status_code}: {upscale_response.text}")
+                    raise requests.HTTPError(f"Upscale error {upscale_response.status_code}")
+                try:
+                    upscale_result = upscale_response.json()
+                except Exception:
+                    logger.error(f"Upscale returned non-JSON: {upscale_response.text[:200]}")
+                    raise
+
+            upscaled_output_url = upscale_result.get("output_url")
+            if not upscaled_output_url:
+                raise ValueError("Missing output_url in response from upscaler")
+
+            upscaled_relative_path = upscaled_output_url.replace(settings.MEDIA_URL, "").lstrip("/")
+            job.output.name = upscaled_relative_path
+            job.save(update_fields=["output"])
+
+            update_job_status(
+                job,
+                "done",
+                job.session_id,
+                output_url=upscaled_output_url,
+                progress=100,
+            )
+            send_progress(job.session_id, "done", job_id=job.id, progress=100)
+            logger.info(f"Upscaling finished for job {job_id}")
 
         finally:
             for f in file_handles:
@@ -158,32 +228,9 @@ def process_job(self, job_id, strength=None, guidance_scale=None, steps=None, pa
         if not Job.objects.filter(id=job_id).exists():
             logger.error(f"Job {job_id} doesn't exist")
             return
-        
         job.refresh_from_db()
         update_job_status(job, "failed", job.session_id)
         raise
-
-
-
-
-def save_masks_as_pngs(masks, job_id):
-    os.makedirs(MASKS_DIR, exist_ok=True)
-    mask_paths = []
-
-    for i, mask_dict in enumerate(masks):
-        mask_array = np.array(mask_dict['segmentation'], dtype=np.float32)
-
-        img = PIL.Image.fromarray((mask_array * 255).astype(np.uint8))
-        img = img.convert("L")  
-
-        rgba = PIL.Image.new("RGBA", img.size, (0, 0, 0, 0))
-        rgba.putalpha(img)
-
-        mask_path = os.path.join(MASKS_DIR, f"job_{job_id}_mask_{i}.png")
-        rgba.save(mask_path)
-        mask_paths.append(format_output_url(mask_path))
-
-    return mask_paths
 
 
 @shared_task(bind=True, max_retries=3)
@@ -230,4 +277,3 @@ def process_segmentation(self, job_id):
     finally:
         for f in file_handles:
             f.close()
-

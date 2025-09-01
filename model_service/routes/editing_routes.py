@@ -54,3 +54,16 @@ async def get_models():
     else:
         status = "success"
     return JSONResponse({"status": status, "models": models})
+
+@router.get("/upscalers")
+async def get_models():
+    """
+    Returns a list of available models.
+    """
+    upscalers = ModelManager.list_upscalers()
+
+    if not upscalers:
+        status = "error"
+    else:
+        status = "success"
+    return JSONResponse({"status": status, "upscalers": upscalers})

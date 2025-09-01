@@ -1,18 +1,25 @@
+
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import MaskingCanvas from '../components/MaskingCanvas';
+import './styles/EditorPage.css'
 
 interface LocationState {
   imageUrl: string;
 }
 
-const EditorPage = () => {
+interface UploadPageProps {
+  darkMode: boolean;
+}
+
+const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
   const { state } = useLocation() as { state: LocationState };
   const navigate = useNavigate();
   const [baseImage, setBaseImage] = useState<HTMLImageElement | null>(null);
   const [prompt, setPrompt] = useState('');
   const [maskData, setMaskData] = useState('');
   const [sessionId, setSessionId] = useState('dummy-session-id');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Models
   const [models, setModels] = useState<string[]>([]);
@@ -27,7 +34,6 @@ const EditorPage = () => {
   const [seed, setSeed] = useState<string>(''); // empty string = None
   const [finishModels, setFinishModels] = useState<string[]>([]);
   const [selectedFinishModel, setSelectedFinishModel] = useState<string>('None'); // default None
-
 
   // Load image from uploaded file
   useEffect(() => {
@@ -84,6 +90,7 @@ const EditorPage = () => {
       return;
     }
 
+    setIsGenerating(true);
     try {
       const maskBlob = await (await fetch(maskData)).blob();
       const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
@@ -120,133 +127,350 @@ const EditorPage = () => {
     } catch (err) {
       console.error(err);
       alert('Error creating job');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
-  if (!baseImage) return <div>Loading image...</div>;
+  if (!baseImage) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'dark:bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading image...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      <h1 className="text-2xl font-bold">Image Editor</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
-        <div>
-          <h2 className="text-xl mb-2">Masking Tool</h2>
-          <MaskingCanvas 
-            baseImage={baseImage} 
-            onMaskExport={setMaskData} 
-          />
+    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'dark:bg-gray-900 dark:text-white' : 'bg-gray-50 text-gray-900'}`}>
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500 bg-clip-text text-transparent">
+              AI Image Editor
+            </h1>
+            <p className={`mt-2 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              Edit and transform your image using advanced AI models
+            </p>
+          </div>
+          <div className={`px-4 py-2 rounded-lg text-sm font-medium ${
+            darkMode 
+              ? 'bg-gray-800 text-blue-400 border border-gray-700' 
+              : 'bg-blue-50 text-blue-700 border border-blue-100'
+          }`}>
+            Image loaded successfully
+          </div>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-xl mb-2">Prompt</h2>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe what you want to generate..."
-              className="w-full h-32 p-2 border rounded"
-            />
-          </div>
-
-          <div>
-            <h2 className="text-xl mb-2">Model</h2>
-            <select
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="w-full p-2 border rounded"
-            >
-              {models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Advanced Settings */}
-          <div>
-            <button
-              className="text-blue-600 underline mb-2"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-            >
-              {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
-            </button>
-
-            {showAdvanced && (
-              <div className="space-y-2 border p-4 rounded bg-gray-50">
-                <div>
-                  <label>Strength:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={strength}
-                    onChange={(e) => setStrength(parseFloat(e.target.value))}
-                    className="w-full p-1 border rounded"
-                  />
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Masking Tool Section */}
+          <div className={`rounded-2xl overflow-hidden transition-all duration-300 ${
+            darkMode 
+              ? 'bg-gray-800/80 backdrop-blur-sm shadow-2xl border border-gray-700' 
+              : 'bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100'
+          }`}>
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                  darkMode 
+                    ? 'bg-blue-900/30 text-blue-400' 
+                    : 'bg-blue-100 text-blue-600'
+                }`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
                 </div>
-                <div>
-                  <label>Guidance Scale:</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={guidanceScale}
-                    onChange={(e) => setGuidanceScale(parseFloat(e.target.value))}
-                    className="w-full p-1 border rounded"
-                  />
-                </div>
-                <div>
-                  <label>Steps:</label>
-                  <input
-                    type="number"
-                    value={steps}
-                    onChange={(e) => setSteps(parseInt(e.target.value))}
-                    className="w-full p-1 border rounded"
-                  />
-                </div>
-                <div>
-                  <label>Passes:</label>
-                  <input
-                    type="number"
-                    value={passes}
-                    onChange={(e) => setPasses(parseInt(e.target.value))}
-                    className="w-full p-1 border rounded"
-                  />
-                </div>
-                <div>
-                  <label>Seed (optional):</label>
-                  <input
-                    type="text"
-                    value={seed}
-                    onChange={(e) => setSeed(e.target.value)}
-                    className="w-full p-1 border rounded"
-                    placeholder="Leave empty for random seed"
-                  />
-                </div>
-                <div>
-                  <label>Finish Model:</label>
-                  <select
-                    value={selectedFinishModel}
-                    onChange={(e) => setSelectedFinishModel(e.target.value)}
-                    className="w-full p-1 border rounded"
-                  >
-                    {finishModels.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <h2 className="text-xl font-semibold">Masking Tool</h2>
               </div>
-            )}
+              <p className={`text-sm mb-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Draw on the image to select the area you want to modify
+              </p>
+              <MaskingCanvas 
+                baseImage={baseImage} 
+                onMaskExport={setMaskData}
+                darkMode={darkMode}
+              />
+            </div>
           </div>
 
-          <button
-            onClick={handleSubmit}
-            className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700"
-          >
-            Generate
-          </button>
+          {/* Controls Section */}
+          <div className="space-y-6">
+            {/* Prompt Input */}
+            <div className={`rounded-2xl p-6 transition-all duration-300 ${
+              darkMode 
+                ? 'bg-gray-800/80 backdrop-blur-sm shadow-2xl border border-gray-700' 
+                : 'bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100'
+            }`}>
+              <div className="flex items-center mb-4">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                  darkMode 
+                    ? 'bg-green-900/30 text-green-400' 
+                    : 'bg-green-100 text-green-600'
+                }`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold">Prompt</h2>
+              </div>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Describe what you want to generate in the masked area..."
+                className={`w-full h-32 p-3 rounded-lg border resize-none focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
+                  darkMode 
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                }`}
+              />
+              <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                Be specific about colors, textures, styles, and details for best results
+              </p>
+            </div>
+
+            {/* Model Selection */}
+            <div className={`rounded-2xl p-6 transition-all duration-300 ${
+              darkMode 
+                ? 'bg-gray-800/80 backdrop-blur-sm shadow-2xl border border-gray-700' 
+                : 'bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100'
+            }`}>
+              <div className="flex items-center mb-4">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                  darkMode 
+                    ? 'bg-purple-900/30 text-purple-400' 
+                    : 'bg-purple-100 text-purple-600'
+                }`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-semibold">Model</h2>
+              </div>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className={`w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
+                  darkMode 
+                    ? 'bg-gray-700 border-gray-600 text-white' 
+                    : 'bg-white border-gray-300 text-gray-900'
+                }`}
+              >
+                {models.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Advanced Settings */}
+            <div className={`rounded-2xl transition-all duration-300 ${
+              darkMode 
+                ? 'bg-gray-800/80 backdrop-blur-sm shadow-2xl border border-gray-700' 
+                : 'bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100'
+            }`}>
+              <button
+                className={`w-full flex items-center justify-between p-6 text-left ${
+                  darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
+                } transition-colors duration-200`}
+                onClick={() => setShowAdvanced(!showAdvanced)}
+              >
+                <div className="flex items-center">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                    darkMode 
+                      ? 'bg-orange-900/30 text-orange-400' 
+                      : 'bg-orange-100 text-orange-600'
+                  }`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-semibold">Advanced Settings</h2>
+                </div>
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className={`h-5 w-5 transition-transform duration-300 ${showAdvanced ? 'transform rotate-180' : ''} ${
+                    darkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`} 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showAdvanced && (
+                <div className={`p-6 pt-0 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Strength: {strength}
+                      </label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={strength}
+                        onChange={(e) => setStrength(parseFloat(e.target.value))}
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                          darkMode 
+                            ? 'bg-gray-700 slider-dark' 
+                            : 'bg-gray-200 slider-light'
+                        }`}
+                      />
+                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Higher values = more changes to the masked area
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Guidance Scale: {guidanceScale}
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        step="0.1"
+                        value={guidanceScale}
+                        onChange={(e) => setGuidanceScale(parseFloat(e.target.value))}
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                          darkMode 
+                            ? 'bg-gray-700 slider-dark' 
+                            : 'bg-gray-200 slider-light'
+                        }`}
+                      />
+                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        Higher values = closer to prompt, may be less creative
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Steps: {steps}
+                      </label>
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        step="1"
+                        value={steps}
+                        onChange={(e) => setSteps(parseInt(e.target.value))}
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                          darkMode 
+                            ? 'bg-gray-700 slider-dark' 
+                            : 'bg-gray-200 slider-light'
+                        }`}
+                      />
+                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        More steps = higher quality, longer processing time
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Passes: {passes}
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="8"
+                        step="1"
+                        value={passes}
+                        onChange={(e) => setPasses(parseInt(e.target.value))}
+                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                          darkMode 
+                            ? 'bg-gray-700 slider-dark' 
+                            : 'bg-gray-200 slider-light'
+                        }`}
+                      />
+                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        More passes = better quality, longer processing time
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-dashed border-gray-600 dark:border-gray-700">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          Seed (optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={seed}
+                          onChange={(e) => setSeed(e.target.value)}
+                          placeholder="Leave empty for random seed"
+                          className={`w-full p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                              : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          Finish Model
+                        </label>
+                        <select
+                          value={selectedFinishModel}
+                          onChange={(e) => setSelectedFinishModel(e.target.value)}
+                          className={`w-full p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
+                            darkMode 
+                              ? 'bg-gray-700 border-gray-600 text-white' 
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                        >
+                          {finishModels.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={handleSubmit}
+              disabled={!maskData || !prompt.trim() || isGenerating}
+              className={`w-full flex items-center justify-center px-6 py-4 rounded-xl font-medium text-lg transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                !maskData || !prompt.trim() || isGenerating
+                  ? darkMode 
+                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed' 
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : darkMode 
+                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg' 
+                    : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-md'
+              }`}
+            >
+              {isGenerating ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                  Generate Image
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

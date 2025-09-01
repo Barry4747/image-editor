@@ -22,7 +22,9 @@ CLASS_MAP = {
     "IllustriousPonyModelWrapper": IllustriousPony,
     "SDXLInpaintModelWrapper": SDXLInpaintModel,
     "UnifiedInpaintModelWrapper": UnifiedInpaintModel,
+    
     "RealESRGANUpscalerWrapper": RealESRGANUpscaler,
+    
     "SamModelWrapper": SAMSegmenter,
 }
 
@@ -46,6 +48,11 @@ class ModelManager:
     @classmethod
     def list_models(cls):
         return list(cls._model_map.keys())
+    
+    
+    @classmethod
+    def list_upscalers(cls):
+        return list(cls._upscaler_map.keys())
 
     @staticmethod
     def _get_free_vram_gb() -> float:

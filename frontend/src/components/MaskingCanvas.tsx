@@ -1,13 +1,14 @@
+
 import { useRef, useState, useEffect, useCallback } from "react";
 import { Stage, Layer, Image as KonvaImage, Line, Rect } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
-
 import { throttle } from "lodash";
-
+import './styles/MaskingCanvas.css'
 
 interface MaskingCanvasProps {
   baseImage: HTMLImageElement;
   onMaskExport: (maskDataUrl: string) => void;
+  darkMode?: boolean;
 }
 
 type LineData = {
@@ -32,10 +33,9 @@ interface AIMask {
   height?: number;
 }
 
-const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
+const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCanvasProps) => {
   const stageRef = useRef<KonvaStage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
 
   const [lines, setLines] = useState<LineData[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -142,7 +142,6 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
       return area < minArea ? i : minIdx;
     }, masksAtCursor[0]!);
   };
-
 
   // --- Obsługa kliknięcia maski ---
   const handleStageClick = (e: any) => {
@@ -415,15 +414,21 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
     onMaskExport(dataUrl);
   }, [lines, baseImage, canvasSize, onMaskExport]);
 
-
-    const throttledMouseMove = throttle(handleMouseMove, 30);
+  const throttledMouseMove = throttle(handleMouseMove, 30);
 
   // --- Render ---
   return (
-    <div className="space-y-4">
-      <div className="flex gap-4 items-center flex-wrap">
-        <label>
-          Brush Size:
+    <div className="space-y-6">
+      {/* Toolbar */}
+      <div className={`flex flex-wrap gap-3 p-4 rounded-xl transition-all duration-300 ${
+        darkMode 
+          ? 'bg-gray-800/80 backdrop-blur-sm border border-gray-700' 
+          : 'bg-white/90 backdrop-blur-sm shadow-sm border border-gray-200'
+      }`}>
+        <div className="flex items-center space-x-2">
+          <label className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            Brush Size:
+          </label>
           <input
             type="range"
             min="1"
@@ -431,66 +436,192 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
             value={brushSize}
             onChange={(e) => setBrushSize(Number(e.target.value))}
             disabled={drawingMode === "rectangle"}
+            className={`w-20 h-2 rounded-lg appearance-none cursor-pointer ${
+              darkMode 
+                ? 'bg-gray-700 slider-dark' 
+                : 'bg-gray-200 slider-light'
+            }`}
           />
-          {brushSize}px
-        </label>
-        <button
-          className={drawingMode === "free" && tool === "brush" ? "active-tool" : ""}
-          onClick={() => {
-            setTool("brush");
-            setDrawingMode("free");
-          }}
-        >
-          Brush
-        </button>
-        <button
-          className={tool === "eraser" ? "active-tool" : ""}
-          onClick={() => {
-            setTool("eraser");
-            setDrawingMode("free");
-          }}
-        >
-          Eraser
-        </button>
-        <button
-          className={drawingMode === "lasso" ? "active-tool" : ""}
-          onClick={() => {
-            setDrawingMode("lasso");
-            setTool("brush");
-          }}
-        >
-          Lasso Select
-        </button>
-        <button
-          className={drawingMode === "rectangle" ? "active-tool" : ""}
-          onClick={() => {
-            setDrawingMode("rectangle");
-            setTool("brush");
-          }}
-        >
-          Rect Select
-        </button>
-        <button onClick={resetAll}>Reset</button>
-        <button onClick={handleAIMask} disabled={aiProcessing}>
-          {aiProcessing ? "Processing AI..." : "Mask with AI"}
-        </button>
-        <button
-          onClick={mergeSelectedMasks}
-          disabled={selectedMaskIndices.length === 0}
-        >
-          Confirm AI Masks ({selectedMaskIndices.length})
-        </button>
+          <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            {brushSize}px
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-2 ml-auto">
+          <button
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
+              drawingMode === "free" && tool === "brush"
+                ? darkMode 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'bg-blue-500 text-white shadow-md'
+                : darkMode 
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            onClick={() => {
+              setTool("brush");
+              setDrawingMode("free");
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            Brush
+          </button>
+          
+          <button
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
+              tool === "eraser"
+                ? darkMode 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'bg-blue-500 text-white shadow-md'
+                : darkMode 
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            onClick={() => {
+              setTool("eraser");
+              setDrawingMode("free");
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Eraser
+          </button>
+          
+          <button
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
+              drawingMode === "lasso"
+                ? darkMode 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'bg-blue-500 text-white shadow-md'
+                : darkMode 
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            onClick={() => {
+              setDrawingMode("lasso");
+              setTool("brush");
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+            Lasso
+          </button>
+          
+          <button
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
+              drawingMode === "rectangle"
+                ? darkMode 
+                  ? 'bg-blue-600 text-white shadow-lg' 
+                  : 'bg-blue-500 text-white shadow-md'
+                : darkMode 
+                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            onClick={() => {
+              setDrawingMode("rectangle");
+              setTool("brush");
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            Rectangle
+          </button>
+          
+          <button
+            onClick={resetAll}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
+              darkMode 
+                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Reset
+          </button>
+          
+          <button
+            onClick={handleAIMask}
+            disabled={aiProcessing}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
+              aiProcessing
+                ? darkMode 
+                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed' 
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : darkMode 
+                  ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md' 
+                  : 'bg-purple-500 text-white hover:bg-purple-600 shadow-md'
+            }`}
+          >
+            {aiProcessing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Processing...
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                AI Mask
+              </>
+            )}
+          </button>
+          
+          <button
+            onClick={mergeSelectedMasks}
+            disabled={selectedMaskIndices.length === 0}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center ${
+              selectedMaskIndices.length === 0
+                ? darkMode 
+                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed' 
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : darkMode 
+                  ? 'bg-green-600 text-white hover:bg-green-700 shadow-md' 
+                  : 'bg-green-500 text-white hover:bg-green-600 shadow-md'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+            Confirm ({selectedMaskIndices.length})
+          </button>
+        </div>
       </div>
 
-      <div className="text-sm text-gray-600">
-        {hoveredMaskIndex !== null ? "Click to select mask" : "Draw or select masks"}
-        {selectedMaskIndices.length > 0 &&
-          ` | ${selectedMaskIndices.length} mask(s) selected`}
+      {/* Status Message */}
+      <div className={`text-sm p-3 rounded-lg ${
+        darkMode 
+          ? 'bg-gray-800/60 text-gray-300' 
+          : 'bg-blue-50 text-blue-700'
+      }`}>
+        {hoveredMaskIndex !== null ? (
+          <span>Click to select mask</span>
+        ) : (
+          <span>Draw on the image to select the area you want to modify</span>
+        )}
+        {selectedMaskIndices.length > 0 && (
+          <span className="ml-2"> | {selectedMaskIndices.length} mask(s) selected</span>
+        )}
       </div>
 
+      {/* Canvas Container */}
       <div
         ref={containerRef}
-        style={{ border: "1px solid #ccc", display: "inline-block" }}
+        className={`rounded-xl overflow-hidden transition-all duration-300 ${
+          darkMode 
+            ? 'bg-gray-800/80 border border-gray-700 shadow-2xl' 
+            : 'bg-white/90 border border-gray-200 shadow-xl'
+        } inline-block`}
+        style={{ 
+          boxShadow: darkMode ? '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' : '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        }}
       >
         <Stage
           ref={stageRef}
@@ -537,8 +668,10 @@ const MaskingCanvas = ({ baseImage, onMaskExport }: MaskingCanvasProps) => {
                 y={selection.y}
                 width={selection.width}
                 height={selection.height}
-                stroke="black"
-                dash={[4, 4]}
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dash={[8, 4]}
+                opacity={0.8}
               />
             )}
           </Layer>

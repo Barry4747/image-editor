@@ -32,7 +32,7 @@ class CreateJobView(views.APIView):
 
         # upscaler
         scale = request.data.get('scale', 4)
-        upscaler_model = request.data.get('upscaler_model', None)
+        upscaler_model = request.data.get('upscaler_model', 'realesrgan-x4plus')
         job = Job.objects.create(
             session_id=session_id,
             image=image,
@@ -45,6 +45,7 @@ class CreateJobView(views.APIView):
             passes=passes,
             seed=seed,
             finish_model=finish_model,
+            upscale_model=upscaler_model,
             scale=scale
         )
 
@@ -78,6 +79,11 @@ def job_progress(request):
 def get_models(request):
     models = requests.get(f"{settings.MODEL_SERVICE_URL}/models")
     return Response(models.json(), status=models.status_code)
+
+@api_view(['GET'])
+def get_upscalers(request):
+    upscalers = requests.get(f"{settings.MODEL_SERVICE_URL}/upscalers")
+    return Response(upscalers.json(), status=upscalers.status_code)
 
 
 @api_view(['POST'])

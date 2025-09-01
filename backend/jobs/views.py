@@ -3,7 +3,7 @@ from rest_framework import views
 from .serializers import JobSerializer
 from rest_framework.response import Response
 from rest_framework import status
-from .tasks import process_job, send_progress, process_segmentation
+from .tasks import process_job, send_progress, process_segmentation, generate_image
 from .models import Job
 import logging
 from rest_framework.decorators import api_view
@@ -18,8 +18,6 @@ class CreateJobView(views.APIView):
 
         image = request.FILES.get('image')
         mask = request.FILES.get('mask')
-        if not image:
-            return Response({"error": "Image file is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         prompt = request.data.get('prompt', '')
         model = request.data.get('model', 'lustify-sdxl')
@@ -51,9 +49,14 @@ class CreateJobView(views.APIView):
 
         logging.info(f"Created job with ID: {job.id} for session: {session_id}")
 
-        process_job.delay(
-            job.id
-        )
+        if image:
+            process_job.delay(
+                job.id
+            )
+        else:
+            generate_image.delay(
+                job.id
+            )
 
         logging.info(f"Started processing job with ID: {job.id}")
 
@@ -78,6 +81,11 @@ def job_progress(request):
 @api_view(['GET'])
 def get_models(request):
     models = requests.get(f"{settings.MODEL_SERVICE_URL}/models")
+    return Response(models.json(), status=models.status_code)
+
+@api_view(['GET'])
+def get_t2i_models(request):
+    models = requests.get(f"{settings.MODEL_SERVICE_URL}/t2i-models")
     return Response(models.json(), status=models.status_code)
 
 @api_view(['GET'])

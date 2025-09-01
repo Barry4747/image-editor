@@ -2,7 +2,7 @@ from django.db import models
 
 class Job(models.Model):
     prompt = models.TextField()
-    image = models.ImageField(upload_to='inputs/')
+    image = models.ImageField(upload_to='inputs/', null=True, blank=True)
     mask = models.ImageField(upload_to='masks/', null=True, blank=True)
     output = models.ImageField(upload_to='outputs/', null=True, blank=True)
     status = models.CharField(max_length=20, default='pending')

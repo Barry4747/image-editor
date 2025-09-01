@@ -230,6 +230,118 @@ def process_job(
         update_job_status(job, "failed", job.session_id)
         raise
 
+@shared_task(bind=True, max_retries=3)
+def generate_image(
+    self, job_id
+):
+    try:
+        job = Job.objects.get(id=job_id)
+        logger.info(f"Starting generationg for job {job_id}")
+        
+        update_job_status(job, 'processing', job.session_id)
+        send_progress(job.session_id, "created", job_id=job.id)
+
+        #TODO negative_prompt
+        data = {
+            "prompt": job.prompt,
+            "job_id": job.id,
+            "model": job.model,
+            "guidance_scale": job.guidance_scale,
+            "steps": job.steps,
+            "seed": job.seed,
+        }
+        data = {k: v for k, v in data.items() if v is not None}
+
+        response = requests.post(
+            f"{settings.MODEL_SERVICE_URL}/generate-image",
+            data=data,
+            timeout=120,
+        )
+        
+        if response.status_code != 200:
+            error_msg = f"Model error: {response.status_code} {response.text}"
+            logger.error(error_msg)
+            raise requests.HTTPError(error_msg)
+
+        result = response.json()
+        output_url = result.get("output_url")
+        
+        if not output_url:
+            raise ValueError("Missing output_url in response")
+
+        formatted_url = format_output_url(output_url)
+        relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")
+        job.output.name = relative_path
+        job.save(update_fields=["output"])
+
+        logger.info(f"Image generated for job {job_id}, starting upscaling...")
+        send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1))
+
+        output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)
+        
+        if not os.path.exists(output_image_path):
+            logger.error(f"Output file not found: {output_image_path}")
+            raise FileNotFoundError("Output file not found for upscaling.")
+
+        with open(output_image_path, 'rb') as f_upscale:
+            upscale_files = {
+                'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
+            }
+            upscale_data = {
+                "model": job.upscale_model,
+                "scale": job.scale or 4,
+            }
+            upscale_response = requests.post(
+                f"{settings.MODEL_SERVICE_URL}/upscale",
+                files=upscale_files,
+                data=upscale_data,
+                timeout=300,
+            )
+            if upscale_response.status_code != 200:
+                logger.error(f"Upscale error {upscale_response.status_code}: {upscale_response.text}")
+                raise requests.HTTPError(f"Upscale error {upscale_response.status_code}")
+            try:
+                upscale_result = upscale_response.json()
+            except Exception:
+                logger.error(f"Upscale returned non-JSON: {upscale_response.text[:200]}")
+                raise
+
+        upscaled_output_url = upscale_result.get("output_url")
+        if not upscaled_output_url:
+            raise ValueError("Missing output_url in response from upscaler")
+
+        upscaled_relative_path = upscaled_output_url.replace(settings.MEDIA_URL, "").lstrip("/")
+        job.output.name = upscaled_relative_path
+        job.save(update_fields=["output"])
+
+        update_job_status(
+            job,
+            "done",
+            job.session_id,
+            preview_url=upscaled_output_url,
+            progress=100,
+        )
+        send_progress(job.session_id, "done", job_id=job.id, progress=100)
+        logger.info(f"Upscaling finished for job {job_id}")
+
+
+    except (IOError, OSError) as e:
+        logger.error(f"File error: {str(e)}")
+        update_job_status(job, "failed", job.session_id)
+        raise
+    except requests.RequestException as e:
+        logger.error(f"API error: {str(e)}")
+        update_job_status(job, "failed", job.session_id)
+        raise self.retry(exc=e, countdown=60)
+    except Exception as e:
+        logger.error(f"Processing error: {str(e)}")
+        if not Job.objects.filter(id=job_id).exists():
+            logger.error(f"Job {job_id} doesn't exist")
+            return
+        job.refresh_from_db()
+        update_job_status(job, "failed", job.session_id)
+        raise    
+
 
 @shared_task(bind=True, max_retries=3)
 def process_segmentation(self, job_id):

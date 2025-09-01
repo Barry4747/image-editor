@@ -46,6 +46,7 @@ models:
     path: C:\Users\Bartek\AImodels\VAE\damn\damnIllustriousPony_v50IllustriousNoobai.safetensors
     vae: C:\Users\Bartek\AImodels\VAE\sdxl
     required_vram: 10
+    class_t2i: SDXLTextToImageModelWrapper
 
   juggernaut-xl:
     class: SDXLInpaintModelWrapper

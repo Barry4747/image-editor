@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import UploadPage from './pages/UploadPage';
 import EditorPage from './pages/EditorPage';
 import JobProgressPage from './pages/JobProgressPage';
+import TextToImagePage from './pages/GeneratePage'
 import Header from './components/Header';
 import Footer from './components/Footer';
 import './index.css';
@@ -44,6 +45,7 @@ const App = () => {
           <Route path="/" element={<UploadPage darkMode={darkMode} />} />
           <Route path="/editor" element={<EditorPage darkMode={darkMode} />} />
           <Route path="/job/:jobId" element={<JobProgressPage darkMode={darkMode} />} />
+          <Route path="/text-to-image" element={<TextToImagePage darkMode={darkMode} />} />
         </Routes>
       </main>
       

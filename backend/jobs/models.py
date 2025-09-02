@@ -20,7 +20,7 @@ class Job(models.Model):
     finish_model = models.CharField(null=True, blank=True)
 
     #for upscaling
-    upscale_model = models.CharField(default='realesrgan-x4plus')
+    upscale_model = models.CharField(null=True, blank=True)
     scale = models.IntegerField(default=4)
 
     #session_id mock MVP solution (in future change this to foreign key of user id for prod)

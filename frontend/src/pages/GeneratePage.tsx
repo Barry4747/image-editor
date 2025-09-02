@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-
 interface UploadPageProps {
   darkMode: boolean;
 }
@@ -16,6 +15,11 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   
+  // Upscalers
+  const [upscalers, setUpscalers] = useState<string[]>([]);
+  const [selectedUpscaler, setSelectedUpscaler] = useState<string>('');
+  const [enableUpscaler, setEnableUpscaler] = useState<boolean>(true);
+
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [guidanceScale, setGuidanceScale] = useState(9.5);
@@ -52,6 +56,21 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
     fetchModels();
   }, []);
 
+  useEffect(() => {
+    const fetchUpscalers = async () => {
+      try {
+        const res = await fetch('/api/upscalers/');
+        if (!res.ok) throw new Error('Failed to fetch upscalers');
+        const data = await res.json();
+        setUpscalers(data.upscalers || []);
+        if (data.upscalers?.length > 0) setSelectedUpscaler(data.upscalers[0]);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchUpscalers();
+  }, []);
+
   const handleSubmit = async () => {
     if (!prompt.trim()) {
       alert('Please enter a prompt');
@@ -72,6 +91,11 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
       if (width) formData.append('width', width.toString());
       if (height) formData.append('height', height.toString());
       if (negativePrompt.trim() !== '') formData.append('negative_prompt', negativePrompt);
+      
+      // Add upscaler model if enabled and selected
+      if (enableUpscaler && selectedUpscaler) {
+        formData.append('upscaler_model', selectedUpscaler);
+      }
 
       const response = await fetch('/jobs', {
         method: 'POST',
@@ -383,6 +407,62 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                             : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
                         }`}
                       />
+                    </div>
+
+                    {/* Upscaler Settings */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          Enable Upscaler
+                        </label>
+                        <button
+                          type="button"
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            enableUpscaler 
+                              ? darkMode 
+                                ? 'bg-blue-600' 
+                                : 'bg-blue-500' 
+                              : darkMode 
+                                ? 'bg-gray-600' 
+                                : 'bg-gray-300'
+                          }`}
+                          onClick={() => setEnableUpscaler(!enableUpscaler)}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              enableUpscaler ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      {enableUpscaler && upscalers.length > 0 && (
+                        <div className="mt-2">
+                          <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                            Select Upscaler
+                          </label>
+                          <select
+                            value={selectedUpscaler}
+                            onChange={(e) => setSelectedUpscaler(e.target.value)}
+                            className={`w-full p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
+                              darkMode 
+                                ? 'bg-gray-700 border-gray-600 text-white' 
+                                : 'bg-white border-gray-300 text-gray-900'
+                            }`}
+                          >
+                            {upscalers.map((upscaler) => (
+                              <option key={upscaler} value={upscaler}>
+                                {upscaler}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                        {enableUpscaler 
+                          ? 'Enhance image quality with super-resolution' 
+                          : 'Upscaling disabled'
+                        }
+                      </p>
                     </div>
                   </div>
                 </div>

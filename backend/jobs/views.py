@@ -31,7 +31,7 @@ class CreateJobView(views.APIView):
 
         # upscaler
         scale = request.data.get('scale', 4)
-        upscaler_model = request.data.get('upscaler_model', 'realesrgan-x4plus')
+        upscaler_model = request.data.get('upscaler_model')
         job = Job.objects.create(
             session_id=session_id,
             image=image,
@@ -61,7 +61,6 @@ class CreateJobView(views.APIView):
             )
 
         logging.info(f"Started processing job with ID: {job.id}")
-
         return Response({"job_id": job.id, "status": job.status})
 
     

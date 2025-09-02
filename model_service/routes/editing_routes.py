@@ -12,7 +12,7 @@ async def process_image(
     image: UploadFile,
     mask: UploadFile = File(None),
     prompt: str = Form(...),
-    negative_prompt: str = Form(...),
+    negative_prompt: str = Form(None),
     job_id: int = Form(...),
     model: str = Form("lustify-sdxl"),
     strength: float = Form(0.75),

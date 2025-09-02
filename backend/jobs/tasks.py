@@ -9,6 +9,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 import PIL
 import numpy as np
+from .serializers import JobSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -163,44 +164,51 @@ def process_job(
             if not os.path.exists(output_image_path):
                 logger.error(f"Output file not found: {output_image_path}")
                 raise FileNotFoundError("Output file not found for upscaling.")
+            
+            upscale_result = None
+            
+            if job.upscale_model:
+                with open(output_image_path, 'rb') as f_upscale:
+                    upscale_files = {
+                        'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
+                    }
+                    upscale_data = {
+                        "model": job.upscale_model,
+                        "scale": job.scale or 4,
+                    }
+                    upscale_response = requests.post(
+                        f"{settings.MODEL_SERVICE_URL}/upscale",
+                        files=upscale_files,
+                        data=upscale_data,
+                        timeout=300,
+                    )
+                    if upscale_response.status_code != 200:
+                        logger.error(f"Upscale error {upscale_response.status_code}: {upscale_response.text}")
+                        raise requests.HTTPError(f"Upscale error {upscale_response.status_code}")
+                    try:
+                        upscale_result = upscale_response.json()
+                    except Exception:
+                        logger.error(f"Upscale returned non-JSON: {upscale_response.text[:200]}")
+                        raise
 
-            with open(output_image_path, 'rb') as f_upscale:
-                upscale_files = {
-                    'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
-                }
-                upscale_data = {
-                    "model": job.upscale_model,
-                    "scale": job.scale or 4,
-                }
-                upscale_response = requests.post(
-                    f"{settings.MODEL_SERVICE_URL}/upscale",
-                    files=upscale_files,
-                    data=upscale_data,
-                    timeout=300,
-                )
-                if upscale_response.status_code != 200:
-                    logger.error(f"Upscale error {upscale_response.status_code}: {upscale_response.text}")
-                    raise requests.HTTPError(f"Upscale error {upscale_response.status_code}")
-                try:
-                    upscale_result = upscale_response.json()
-                except Exception:
-                    logger.error(f"Upscale returned non-JSON: {upscale_response.text[:200]}")
-                    raise
-
-            upscaled_output_url = upscale_result.get("output_url")
-            if not upscaled_output_url:
-                raise ValueError("Missing output_url in response from upscaler")
+            if not upscale_result:
+                upscaled_output_url = formatted_url
+            else:
+                upscaled_output_url = upscale_result.get("output_url")
 
             upscaled_relative_path = upscaled_output_url.replace(settings.MEDIA_URL, "").lstrip("/")
             job.output.name = upscaled_relative_path
             job.save(update_fields=["output"])
 
+            
+            serializer = JobSerializer(job)
             update_job_status(
                 job,
                 "done",
                 job.session_id,
                 preview_url=upscaled_output_url,
                 progress=100,
+                job_data=serializer.data
             )
             send_progress(job.session_id, "done", job_id=job.id, progress=100)
             logger.info(f"Upscaling finished for job {job_id}")
@@ -288,44 +296,50 @@ def generate_image(
         if not os.path.exists(output_image_path):
             logger.error(f"Output file not found: {output_image_path}")
             raise FileNotFoundError("Output file not found for upscaling.")
+        
+        upscale_result = None
 
-        with open(output_image_path, 'rb') as f_upscale:
-            upscale_files = {
-                'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
-            }
-            upscale_data = {
-                "model": job.upscale_model,
-                "scale": job.scale or 4,
-            }
-            upscale_response = requests.post(
-                f"{settings.MODEL_SERVICE_URL}/upscale",
-                files=upscale_files,
-                data=upscale_data,
-                timeout=300,
-            )
-            if upscale_response.status_code != 200:
-                logger.error(f"Upscale error {upscale_response.status_code}: {upscale_response.text}")
-                raise requests.HTTPError(f"Upscale error {upscale_response.status_code}")
-            try:
-                upscale_result = upscale_response.json()
-            except Exception:
-                logger.error(f"Upscale returned non-JSON: {upscale_response.text[:200]}")
-                raise
+        if job.upscale_model:
+            with open(output_image_path, 'rb') as f_upscale:
+                upscale_files = {
+                    'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
+                }
+                upscale_data = {
+                    "model": job.upscale_model,
+                    "scale": job.scale or 4,
+                }
+                upscale_response = requests.post(
+                    f"{settings.MODEL_SERVICE_URL}/upscale",
+                    files=upscale_files,
+                    data=upscale_data,
+                    timeout=300,
+                )
+                if upscale_response.status_code != 200:
+                    logger.error(f"Upscale error {upscale_response.status_code}: {upscale_response.text}")
+                    raise requests.HTTPError(f"Upscale error {upscale_response.status_code}")
+                try:
+                    upscale_result = upscale_response.json()
+                except Exception:
+                    logger.error(f"Upscale returned non-JSON: {upscale_response.text[:200]}")
+                    raise
 
-        upscaled_output_url = upscale_result.get("output_url")
-        if not upscaled_output_url:
-            raise ValueError("Missing output_url in response from upscaler")
-
+        if not upscale_result:
+            upscaled_output_url = formatted_url
+        else:
+            upscaled_output_url = upscale_result.get("output_url")
+        
         upscaled_relative_path = upscaled_output_url.replace(settings.MEDIA_URL, "").lstrip("/")
         job.output.name = upscaled_relative_path
         job.save(update_fields=["output"])
 
+        serializer = JobSerializer(job)
         update_job_status(
             job,
             "done",
             job.session_id,
             preview_url=upscaled_output_url,
             progress=100,
+            job_data=serializer.data
         )
         send_progress(job.session_id, "done", job_id=job.id, progress=100)
         logger.info(f"Upscaling finished for job {job_id}")

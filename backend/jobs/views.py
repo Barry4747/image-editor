@@ -20,6 +20,7 @@ class CreateJobView(views.APIView):
         mask = request.FILES.get('mask')
 
         prompt = request.data.get('prompt', '')
+        negative_prompt = request.data.get('negative_prompt')
         model = request.data.get('model', 'lustify-sdxl')
         strength = float(request.data.get('strength', 0.75))
         guidance_scale = float(request.data.get('guidance_scale', 9.5))
@@ -36,6 +37,7 @@ class CreateJobView(views.APIView):
             image=image,
             mask=mask,
             prompt=prompt,
+            negative_prompt=negative_prompt,
             model=model,
             strength=strength,
             guidance_scale=guidance_scale,

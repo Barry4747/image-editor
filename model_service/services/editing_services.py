@@ -61,6 +61,7 @@ def process_image_file(
     input_img: Image.Image,
     mask_img: Image.Image,
     prompt: str,
+    negative_prompt: str,
     job_id: int,
     model: str,
     strength: float,
@@ -91,13 +92,13 @@ def process_image_file(
         f"fine details, subtle imperfections, lifelike eyes, natural skin, {prompt}",
         f"ultra-realistic, 8K, cinematic, perfect anatomy, hyper-detailed, {prompt}"
     ]
-
-    negative_prompt = (
-        "blurry, cartoon, painting, illustration, drawing, deformed, distorted, "
-        "extra limbs, bad anatomy, unrealistic proportions, plastic, doll-like, "
-        "airbrushed, overexposed, flat lighting, low contrast, watermark, text, "
-        "low quality, noisy, grainy, out of focus"
-    )
+    if not negative_prompt:
+        negative_prompt = (
+            "blurry, cartoon, painting, illustration, drawing, deformed, distorted, "
+            "extra limbs, bad anatomy, unrealistic proportions, plastic, doll-like, "
+            "airbrushed, overexposed, flat lighting, low contrast, watermark, text, "
+            "low quality, noisy, grainy, out of focus"
+        )
 
     extra_kwargs = {}
     if model in PREPROCESSORS:

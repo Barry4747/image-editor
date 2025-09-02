@@ -34,8 +34,8 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
   const [seed, setSeed] = useState<string>(''); // empty string = None
   const [finishModels, setFinishModels] = useState<string[]>([]);
   const [selectedFinishModel, setSelectedFinishModel] = useState<string>('None'); // default None
+  const [negativePrompt, setNegativePrompt] = useState('');
 
-  // Load image from uploaded file
   useEffect(() => {
     if (!state?.imageUrl) {
       navigate('/');
@@ -111,6 +111,7 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
       if (passes != null) formData.append('passes', passes.toString());
       if (seed.trim() !== '') formData.append('seed', seed);
       if (selectedFinishModel !== 'None') formData.append('finish_model', selectedFinishModel);
+      if (negativePrompt.trim() !== '') formData.append('negative_prompt', negativePrompt);
 
       const response = await fetch('/jobs', {
         method: 'POST',
@@ -230,6 +231,22 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
               <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 Be specific about colors, textures, styles, and details for best results
               </p>
+            </div>
+            <div className="mt-4">
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                Negative Prompt (optional)
+              </label>
+              <input
+                type="text"
+                value={negativePrompt}
+                onChange={(e) => setNegativePrompt(e.target.value)}
+                placeholder="Things to avoid (e.g., blurry, low quality, text, watermark)"
+                className={`w-full p-3 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
+                  darkMode 
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                }`}
+              />
             </div>
 
             {/* Model Selection */}

@@ -98,7 +98,6 @@ def process_job(
         file_handles = []
         
         try:
-            # przygotowanie input image
             if job.image:
                 try:
                     f = job.image.open('rb')
@@ -108,7 +107,6 @@ def process_job(
                     logger.error(f"Failed to open image file: {str(e)}")
                     raise
 
-            # przygotowanie mask
             if job.mask:
                 try:
                     f = job.mask.open('rb')
@@ -122,6 +120,7 @@ def process_job(
 
             data = {
                 "prompt": job.prompt,
+                "negative_prompt": job.negative_prompt,
                 "job_id": job.id,
                 "model": job.model,
                 "strength": job.strength,
@@ -241,9 +240,9 @@ def generate_image(
         update_job_status(job, 'processing', job.session_id)
         send_progress(job.session_id, "created", job_id=job.id)
 
-        #TODO negative_prompt
         data = {
             "prompt": job.prompt,
+            "negative_prompt": job.negative_prompt,
             "job_id": job.id,
             "model": job.model,
             "guidance_scale": job.guidance_scale,
@@ -275,6 +274,13 @@ def generate_image(
         job.save(update_fields=["output"])
 
         logger.info(f"Image generated for job {job_id}, starting upscaling...")
+        update_job_status(
+            job,
+            "progress",
+            job.session_id,
+            preview_url=output_url,
+            progress=80,
+        )
         send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1))
 
         output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)

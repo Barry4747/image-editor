@@ -9,6 +9,11 @@ import logging
 from rest_framework.decorators import api_view
 import requests
 from django.conf import settings
+from .session_history import add_event
+from rest_framework.decorators import api_view
+from .session_history import get_history, clear_history
+
+
 
 class CreateJobView(views.APIView):
     def post(self, request):
@@ -48,6 +53,7 @@ class CreateJobView(views.APIView):
             upscale_model=upscaler_model,
             scale=scale
         )
+        add_event(session_id, {"type": "created", "job_id": job.id, "model": job.model})
 
         logging.info(f"Created job with ID: {job.id} for session: {session_id}")
 
@@ -114,6 +120,8 @@ def get_masks(request):
         prompt=prompt,
         model=model
     )
+    add_event(session_id, {"type": "created", "job_id": job.id, "model": job.model})
+
 
     process_segmentation.delay(job.id)
 
@@ -130,3 +138,25 @@ def get_masks_status(request, job_id):
         return Response({"status": "done", "masks": job.masks})
     else:
         return Response({"status": "processing"}, status=202)
+    
+
+def _require_session(request):
+    sid = request.headers.get("X-Session-ID")
+    if not sid:
+        return None, Response({"error": "Session ID is required."}, status=400)
+    return sid, None
+
+@api_view(["GET"])
+def session_history(request):
+    session_id, err = _require_session(request)
+    if err:
+        return err
+    return Response({"events": get_history(session_id)})
+
+@api_view(["DELETE"])
+def clear_session_history_view(request):
+    session_id, err = _require_session(request)
+    if err:
+        return err
+    clear_history(session_id)
+    return Response(status=status.HTTP_204_NO_CONTENT)

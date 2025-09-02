@@ -1,5 +1,15 @@
 from django.urls import path
-from .views import CreateJobView, job_progress, get_models, get_masks, get_masks_status, get_t2i_models, get_upscalers
+from .views import (
+    CreateJobView, 
+    job_progress, 
+    get_models, 
+    get_masks, 
+    get_masks_status, 
+    get_t2i_models, 
+    get_upscalers,
+    session_history,
+    clear_session_history_view
+)
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -11,5 +21,6 @@ urlpatterns = [
     path('api/upscalers/', get_upscalers, name='get_upscalers'),
     path('api/get_masks', get_masks, name='get_masks'),               
     path('api/get_masks_status/<int:job_id>', get_masks_status, name='get_masks_status'),  
-
+    path("history", session_history),
+    path("history/clear", clear_session_history_view),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

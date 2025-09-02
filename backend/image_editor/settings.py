@@ -189,3 +189,15 @@ LOGGING = {
         },
     },
 }
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "image-editor-cache",
+        "TIMEOUT": None,  # zarządzamy TTL per wpis
+    }
+}
+# PROD: podmień na Redis (jedna zmiana):
+# "BACKEND": "django_redis.cache.RedisCache",
+# "LOCATION": "redis://127.0.0.1:6379/1",
+

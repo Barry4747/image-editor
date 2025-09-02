@@ -10,6 +10,8 @@ from channels.layers import get_channel_layer
 import PIL
 import numpy as np
 from .serializers import JobSerializer
+from .session_history import add_event
+
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +48,7 @@ def update_job_status(job, status, session_id=None, masks=None, **kwargs):
     job.save()
     if session_id:
         send_progress(session_id, status, job_id=job.id, **kwargs)
-    
+        add_event(session_id, {"type": status, "job_id": job.id, **kwargs})
 
 def format_output_url(file_path):
     if not file_path:

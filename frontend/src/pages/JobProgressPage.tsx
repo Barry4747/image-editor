@@ -71,14 +71,15 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
               setStatus('processing');
               if (data.progress !== undefined) setProgress(data.progress * 100);
               if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
+              console.log(outputUrl)
               break;
             
             case 'upscaling':
               setStatus('upscaling');
               if (data.progress !== undefined) setProgress(data.progress * 100);
               if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
+              console.log(data)
               break;
-              
             case 'done':
               setStatus('done');
               setProgress(100);

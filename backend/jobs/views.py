@@ -10,14 +10,16 @@ from rest_framework.decorators import api_view
 import requests
 from django.conf import settings
 from .session_history import add_event
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from .session_history import get_history, clear_history
+from rest_framework.permissions import IsAuthenticated
 
 
 
 class CreateJobView(views.APIView):
     def post(self, request):
-        session_id = request.headers.get('X-Session-ID')
+        user = request.user if request.user.is_authenticated else None
+        session_id = request.headers.get("X-Session-ID") if not user else ""
         if not session_id:
             return Response({"error": "Session ID is required."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -38,6 +40,7 @@ class CreateJobView(views.APIView):
         scale = request.data.get('scale', 4)
         upscaler_model = request.data.get('upscaler_model')
         job = Job.objects.create(
+            user=user,
             session_id=session_id,
             image=image,
             mask=mask,
@@ -103,7 +106,8 @@ def get_upscalers(request):
 
 @api_view(['POST'])
 def get_masks(request):
-    session_id = request.headers.get('X-Session-ID')
+    user = request.user if request.user.is_authenticated else None
+    session_id = request.headers.get("X-Session-ID") if not user else ""
     if not session_id:
         return Response({"error": "Session ID is required."}, status=400)
 
@@ -115,6 +119,7 @@ def get_masks(request):
     prompt = '!auto_segmentation'
 
     job = Job.objects.create(
+        user=user,
         session_id=session_id,
         image=image,
         prompt=prompt,
@@ -160,3 +165,13 @@ def clear_session_history_view(request):
         return err
     clear_history(session_id)
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def claim_session_jobs(request):
+    session_id = request.data.get("session_id")
+    if not session_id:
+        return Response({"error": "session_id required"}, status=400)
+    updated = Job.objects.filter(session_id=session_id, user__isnull=True).update(user=request.user)
+    return Response({"moved": updated})

@@ -4,7 +4,7 @@ import requests
 from urllib.parse import urljoin
 from celery import shared_task
 from django.conf import settings
-from .models import Job
+from .models import Job, JobEvent
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 import PIL
@@ -46,6 +46,9 @@ def update_job_status(job, status, session_id=None, masks=None, **kwargs):
         job.masks = masks
     
     job.save()
+
+    JobEvent.objects.create(job=job, type=status, payload=kwargs)
+
     if session_id:
         send_progress(session_id, status, job_id=job.id, **kwargs)
         add_event(session_id, {"type": status, "job_id": job.id, **kwargs})
@@ -159,7 +162,7 @@ def process_job(
             job.save(update_fields=["output"])
 
             logger.info(f"Image processed for job {job_id}, starting upscaling...")
-            send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1))
+            send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1), preview_url="/media/"+relative_path)
 
             output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)
             
@@ -288,10 +291,10 @@ def generate_image(
             job,
             "progress",
             job.session_id,
-            preview_url=output_url,
+            preview_url="/media/"+relative_path,
             progress=80,
         )
-        send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1))
+        send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1), preview_url="/media/"+relative_path)
 
         output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)
         

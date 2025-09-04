@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'core',
     'rest_framework',
     'jobs',
+    'users',
 ]
 
 MIDDLEWARE = [
@@ -201,3 +202,25 @@ CACHES = {
 # "BACKEND": "django_redis.cache.RedisCache",
 # "LOCATION": "redis://127.0.0.1:6379/1",
 
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+}
+
+AUTH_USER_MODEL = "users.User"
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+from corsheaders.defaults import default_headers
+
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-session-id",
+]

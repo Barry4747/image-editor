@@ -1,4 +1,7 @@
 from django.db import models
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class Job(models.Model):
     prompt = models.TextField()
@@ -23,8 +26,19 @@ class Job(models.Model):
     upscale_model = models.CharField(null=True, blank=True)
     scale = models.IntegerField(default=4)
 
-    #session_id mock MVP solution (in future change this to foreign key of user id for prod)
-    session_id = models.CharField(max_length=100, null=True, blank=True)
+    #identification
+    session_id = models.CharField(max_length=100, db_index=True, blank=True)
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="jobs")
 
     def __str__(self):
         return f"Job {self.id} - {self.status}"
+
+
+class JobEvent(models.Model):
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="events")
+    type = models.CharField(max_length=32)           
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["job", "created_at"])]

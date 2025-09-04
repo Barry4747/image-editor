@@ -8,10 +8,12 @@ from .views import (
     get_t2i_models, 
     get_upscalers,
     session_history,
-    clear_session_history_view
+    clear_session_history_view,
+    claim_session_jobs,
 )
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
     path('jobs', CreateJobView.as_view(), name='create_job'),
@@ -23,4 +25,9 @@ urlpatterns = [
     path('api/get_masks_status/<int:job_id>', get_masks_status, name='get_masks_status'),  
     path("history", session_history),
     path("history/clear", clear_session_history_view),
+    path("jobs/claim", claim_session_jobs),
+    path("auth/token", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/token/refresh", TokenRefreshView.as_view(), name="token_refresh"),
+ 
+
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

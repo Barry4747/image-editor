@@ -24,7 +24,7 @@ async def upscale_image(
 ):
     img_bytes = await image.read()
     pil_image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-    model = ModelManager.get_upscaler(model_name=model)
+    model = ModelManager.get_upscaler(model_name=model, scale=scale)
     upscaled = model.upscale(pil_image, scale)
 
     

@@ -4,14 +4,14 @@ import requests
 from urllib.parse import urljoin
 from celery import shared_task
 from django.conf import settings
-from .models import Job, JobEvent
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-import PIL
+from PIL import Image as PILImage
 import numpy as np
+
+from .models import Job, JobEvent
 from .serializers import JobSerializer
 from .session_history import add_event
-
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Configuration
 BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "media")
 MEDIA_ROOT = os.path.join(BASE_MEDIA_ROOT, "outputs")
 MEDIA_URL = "/media/"
@@ -26,6 +27,7 @@ MASKS_DIR = os.path.join(MEDIA_ROOT, "masks")
 
 
 def send_progress(session_id, event_type, **kwargs):
+    """Send real-time progress update via WebSocket."""
     try:
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
@@ -40,11 +42,11 @@ def send_progress(session_id, event_type, **kwargs):
         logger.error(f"Failed to send progress update: {str(e)}")
 
 
-def update_job_status(job, status, session_id=None, masks=None, **kwargs):
+def update_job_status(job, status, session_id=None, **kwargs):
+    """Update job status, save event, and broadcast progress."""
     job.status = status
-    if masks:
-        job.masks = masks
-    
+    if 'masks' in kwargs:
+        job.masks = kwargs['masks']
     job.save()
 
     JobEvent.objects.create(job=job, type=status, payload=kwargs)
@@ -53,75 +55,156 @@ def update_job_status(job, status, session_id=None, masks=None, **kwargs):
         send_progress(session_id, status, job_id=job.id, **kwargs)
         add_event(session_id, {"type": status, "job_id": job.id, **kwargs})
 
+
 def format_output_url(file_path):
+    """Convert file path to accessible URL."""
     if not file_path:
         return None
-    
+
     if file_path.startswith(('http://', 'https://', '/')):
         return file_path
-    
-    normalized_path = file_path.replace('\\', '/')
-    media_root = settings.MEDIA_ROOT.replace('\\', '/')
-    
+
+    normalized_path = os.path.normpath(file_path).replace('\\', '/')
+    media_root = os.path.normpath(settings.MEDIA_ROOT).replace('\\', '/')
+
     if normalized_path.startswith(media_root):
         relative_path = normalized_path[len(media_root):].lstrip('/')
         return urljoin(settings.MEDIA_URL, relative_path)
-    
+
     if not os.path.isabs(file_path):
-        return urljoin(settings.MEDIA_URL, file_path)
-    
+        return urljoin(settings.MEDIA_URL, file_path.lstrip('/'))
+
     raise ValueError(f"Path {file_path} is outside MEDIA_ROOT")
 
 
 def save_masks_as_pngs(masks, job_id):
+    """Save segmentation masks as transparent PNGs."""
     os.makedirs(MASKS_DIR, exist_ok=True)
     mask_paths = []
 
     for i, mask_dict in enumerate(masks):
         mask_array = np.array(mask_dict['segmentation'], dtype=np.float32)
-        img = PIL.Image.fromarray((mask_array * 255).astype(np.uint8))
-        img = img.convert("L")  
-        rgba = PIL.Image.new("RGBA", img.size, (0, 0, 0, 0))
+        img = PILImage.fromarray((mask_array * 255).astype(np.uint8))
+        img = img.convert("L")
+        rgba = PILImage.new("RGBA", img.size, (0, 0, 0, 0))
         rgba.putalpha(img)
         mask_path = os.path.join(MASKS_DIR, f"job_{job_id}_mask_{i}.png")
         rgba.save(mask_path)
         mask_paths.append(format_output_url(mask_path))
+
     return mask_paths
 
 
+def post_request_with_files(url, data=None, files=None, timeout=120):
+    """Make POST request with files and data, handle errors."""
+    try:
+        response = requests.post(url, data=data, files=files, timeout=timeout)
+        response.raise_for_status()
+        return response.json()
+    except requests.HTTPError as e:
+        logger.error(f"HTTP error {response.status_code}: {response.text}")
+        raise
+    except requests.RequestException as e:
+        logger.error(f"Request failed: {str(e)}")
+        raise
+
+
+def prepare_files_for_job(job):
+    """Prepare file payloads for upload."""
+    files = {}
+    handles = []
+
+    def open_file(field, name):
+        f = field.open('rb')
+        filename = os.path.basename(field.name)
+        files[name] = (filename, f, 'image/png')
+        handles.append(f)
+        return f
+
+    try:
+        if job.image:
+            open_file(job.image, "image")
+        if job.mask:
+            open_file(job.mask, "mask")
+        return files, handles
+    except Exception as e:
+        logger.error(f"Failed to open file: {str(e)}")
+        raise
+
+
+def upscale_image(output_image_path, model, scale=4):
+    """Upscale image via model service."""
+    if not os.path.exists(output_image_path):
+        raise FileNotFoundError(f"Output file not found: {output_image_path}")
+
+    with open(output_image_path, 'rb') as f:
+        files = {'image': (os.path.basename(output_image_path), f, 'image/png')}
+        data = {"model": model, "scale": scale}
+        return post_request_with_files(
+            f"{settings.MODEL_SERVICE_URL}/upscale",
+            data=data,
+            files=files,
+            timeout=300
+        )
+
+
+def handle_output_and_upscale(job, output_url, progress_step=80):
+    """Save output, optionally upscale, and update job."""
+    formatted_url = format_output_url(output_url)
+    relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")
+    job.output.name = relative_path
+    job.save(update_fields=["output"])
+
+    output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)
+
+    # Broadcast preview
+    update_job_status(
+        job,
+        "progress",
+        job.session_id,
+        preview_url=formatted_url,
+        progress=progress_step
+    )
+    send_progress(job.session_id, "upscaling", job_id=job.id, progress=progress_step, preview_url=formatted_url)
+
+    # Upscale if needed
+    upscaled_output_url = formatted_url
+    if job.upscale_model:
+        try:
+            upscale_result = upscale_image(output_image_path, job.upscale_model, job.scale or 4)
+            upscaled_output_url = format_output_url(upscale_result.get("output_url"))
+            upscaled_relative_path = upscaled_output_url.replace(settings.MEDIA_URL, "").lstrip("/")
+            job.output.name = upscaled_relative_path
+            job.save(update_fields=["output"])
+        except Exception as e:
+            logger.warning(f"Upscaling failed, falling back to original: {str(e)}")
+
+    # Finalize
+    serializer = JobSerializer(job)
+    update_job_status(
+        job,
+        "done",
+        job.session_id,
+        preview_url=upscaled_output_url,
+        progress=100,
+        job_data=serializer.data
+    )
+    send_progress(job.session_id, "done", job_id=job.id, progress=100)
+    logger.info(f"Processing completed for job {job.id}")
+
+
 @shared_task(bind=True, max_retries=3)
-def process_job(
-    self, job_id
-):
+def process_job(self, job_id):
+    """Process an image with optional mask and upscaling."""
     try:
         job = Job.objects.get(id=job_id)
         logger.info(f"Starting processing for job {job_id}")
-        
         update_job_status(job, 'processing', job.session_id)
         send_progress(job.session_id, "created", job_id=job.id)
 
-        files = {}
-        file_handles = []
-        
+        files, handles = {}, []
         try:
-            if job.image:
-                try:
-                    f = job.image.open('rb')
-                    files["image"] = (os.path.basename(job.image.name), f, "image/png")
-                    file_handles.append(f)
-                except Exception as e:
-                    logger.error(f"Failed to open image file: {str(e)}")
-                    raise
-
-            if job.mask:
-                try:
-                    f = job.mask.open('rb')
-                    files["mask"] = (os.path.basename(job.mask.name), f, "image/png")
-                    file_handles.append(f)
-                except Exception as e:
-                    logger.error(f"Failed to open mask file: {str(e)}")
-                    raise
-
+            files, handles = prepare_files_for_job(job)
             send_progress(job.session_id, "progress", job_id=job.id, progress=20)
 
             data = {
@@ -138,88 +221,21 @@ def process_job(
             }
             data = {k: v for k, v in data.items() if v is not None}
 
-            response = requests.post(
+            result = post_request_with_files(
                 f"{settings.MODEL_SERVICE_URL}/process-image",
-                files=files,
                 data=data,
-                timeout=120,
+                files=files,
+                timeout=120
             )
-            
-            if response.status_code != 200:
-                error_msg = f"Model error: {response.status_code} {response.text}"
-                logger.error(error_msg)
-                raise requests.HTTPError(error_msg)
 
-            result = response.json()
             output_url = result.get("output_url")
-            
             if not output_url:
                 raise ValueError("Missing output_url in response")
 
-            formatted_url = format_output_url(output_url)
-            relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")
-            job.output.name = relative_path
-            job.save(update_fields=["output"])
-
-            logger.info(f"Image processed for job {job_id}, starting upscaling...")
-            send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1), preview_url="/media/"+relative_path)
-
-            output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)
-            
-            if not os.path.exists(output_image_path):
-                logger.error(f"Output file not found: {output_image_path}")
-                raise FileNotFoundError("Output file not found for upscaling.")
-            
-            upscale_result = None
-            
-            if job.upscale_model:
-                with open(output_image_path, 'rb') as f_upscale:
-                    upscale_files = {
-                        'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
-                    }
-                    upscale_data = {
-                        "model": job.upscale_model,
-                        "scale": job.scale or 4,
-                    }
-                    upscale_response = requests.post(
-                        f"{settings.MODEL_SERVICE_URL}/upscale",
-                        files=upscale_files,
-                        data=upscale_data,
-                        timeout=300,
-                    )
-                    if upscale_response.status_code != 200:
-                        logger.error(f"Upscale error {upscale_response.status_code}: {upscale_response.text}")
-                        raise requests.HTTPError(f"Upscale error {upscale_response.status_code}")
-                    try:
-                        upscale_result = upscale_response.json()
-                    except Exception:
-                        logger.error(f"Upscale returned non-JSON: {upscale_response.text[:200]}")
-                        raise
-
-            if not upscale_result:
-                upscaled_output_url = formatted_url
-            else:
-                upscaled_output_url = upscale_result.get("output_url")
-
-            upscaled_relative_path = upscaled_output_url.replace(settings.MEDIA_URL, "").lstrip("/")
-            job.output.name = upscaled_relative_path
-            job.save(update_fields=["output"])
-
-            
-            serializer = JobSerializer(job)
-            update_job_status(
-                job,
-                "done",
-                job.session_id,
-                preview_url=upscaled_output_url,
-                progress=100,
-                job_data=serializer.data
-            )
-            send_progress(job.session_id, "done", job_id=job.id, progress=100)
-            logger.info(f"Upscaling finished for job {job_id}")
+            handle_output_and_upscale(job, output_url, progress_step=50)
 
         finally:
-            for f in file_handles:
+            for f in handles:
                 try:
                     f.close()
                 except Exception as e:
@@ -236,20 +252,19 @@ def process_job(
     except Exception as e:
         logger.error(f"Processing error: {str(e)}")
         if not Job.objects.filter(id=job_id).exists():
-            logger.error(f"Job {job_id} doesn't exist")
+            logger.error(f"Job {job_id} does not exist")
             return
         job.refresh_from_db()
         update_job_status(job, "failed", job.session_id)
         raise
 
+
 @shared_task(bind=True, max_retries=3)
-def generate_image(
-    self, job_id
-):
+def generate_image(self, job_id):
+    """Generate image from prompt and optionally upscale."""
     try:
         job = Job.objects.get(id=job_id)
-        logger.info(f"Starting generationg for job {job_id}")
-        
+        logger.info(f"Starting image generation for job {job_id}")
         update_job_status(job, 'processing', job.session_id)
         send_progress(job.session_id, "created", job_id=job.id)
 
@@ -264,151 +279,76 @@ def generate_image(
         }
         data = {k: v for k, v in data.items() if v is not None}
 
-        response = requests.post(
+        result = post_request_with_files(
             f"{settings.MODEL_SERVICE_URL}/generate-image",
             data=data,
-            timeout=120,
+            timeout=120
         )
-        
-        if response.status_code != 200:
-            error_msg = f"Model error: {response.status_code} {response.text}"
-            logger.error(error_msg)
-            raise requests.HTTPError(error_msg)
 
-        result = response.json()
         output_url = result.get("output_url")
-        
         if not output_url:
             raise ValueError("Missing output_url in response")
 
-        formatted_url = format_output_url(output_url)
-        relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")
-        job.output.name = relative_path
-        job.save(update_fields=["output"])
+        handle_output_and_upscale(job, output_url, progress_step=80)
 
-        logger.info(f"Image generated for job {job_id}, starting upscaling...")
-        update_job_status(
-            job,
-            "progress",
-            job.session_id,
-            preview_url="/media/"+relative_path,
-            progress=80,
-        )
-        send_progress(job.session_id, "upscaling", job_id=job.id, progress=job.passes/(job.passes+1), preview_url="/media/"+relative_path)
-
-        output_image_path = os.path.join(settings.MEDIA_ROOT, job.output.name)
-        
-        if not os.path.exists(output_image_path):
-            logger.error(f"Output file not found: {output_image_path}")
-            raise FileNotFoundError("Output file not found for upscaling.")
-        
-        upscale_result = None
-
-        if job.upscale_model:
-            with open(output_image_path, 'rb') as f_upscale:
-                upscale_files = {
-                    'image': (os.path.basename(output_image_path), f_upscale, 'image/png')
-                }
-                upscale_data = {
-                    "model": job.upscale_model,
-                    "scale": job.scale or 4,
-                }
-                upscale_response = requests.post(
-                    f"{settings.MODEL_SERVICE_URL}/upscale",
-                    files=upscale_files,
-                    data=upscale_data,
-                    timeout=300,
-                )
-                if upscale_response.status_code != 200:
-                    logger.error(f"Upscale error {upscale_response.status_code}: {upscale_response.text}")
-                    raise requests.HTTPError(f"Upscale error {upscale_response.status_code}")
-                try:
-                    upscale_result = upscale_response.json()
-                except Exception:
-                    logger.error(f"Upscale returned non-JSON: {upscale_response.text[:200]}")
-                    raise
-
-        if not upscale_result:
-            upscaled_output_url = formatted_url
-        else:
-            upscaled_output_url = upscale_result.get("output_url")
-        
-        upscaled_relative_path = upscaled_output_url.replace(settings.MEDIA_URL, "").lstrip("/")
-        job.output.name = upscaled_relative_path
-        job.save(update_fields=["output"])
-
-        serializer = JobSerializer(job)
-        update_job_status(
-            job,
-            "done",
-            job.session_id,
-            preview_url=upscaled_output_url,
-            progress=100,
-            job_data=serializer.data
-        )
-        send_progress(job.session_id, "done", job_id=job.id, progress=100)
-        logger.info(f"Upscaling finished for job {job_id}")
-
-
-    except (IOError, OSError) as e:
-        logger.error(f"File error: {str(e)}")
-        update_job_status(job, "failed", job.session_id)
-        raise
     except requests.RequestException as e:
         logger.error(f"API error: {str(e)}")
         update_job_status(job, "failed", job.session_id)
         raise self.retry(exc=e, countdown=60)
     except Exception as e:
-        logger.error(f"Processing error: {str(e)}")
+        logger.error(f"Generation error: {str(e)}")
         if not Job.objects.filter(id=job_id).exists():
-            logger.error(f"Job {job_id} doesn't exist")
+            logger.error(f"Job {job_id} does not exist")
             return
         job.refresh_from_db()
         update_job_status(job, "failed", job.session_id)
-        raise    
+        raise
 
 
 @shared_task(bind=True, max_retries=3)
 def process_segmentation(self, job_id):
-    job = Job.objects.get(id=job_id)
-    files = {}
-    file_handles = []
-    job.status = "processing"
-    job.save()
+    """Run auto-segmentation and save masks."""
     try:
-        if job.image:
-            f = job.image.open('rb')
-            files["image"] = (os.path.basename(job.image.name), f, "image/png")
-            file_handles.append(f)
+        job = Job.objects.get(id=job_id)
+        logger.info(f"Starting segmentation for job {job_id}")
+        update_job_status(job, "processing", job.session_id)
 
-        data = {"model": job.model, "job_id": job_id}
+        files, handles = {}, []
+        try:
+            files, handles = prepare_files_for_job(job)
+            data = {"model": job.model, "job_id": job_id}
 
-        response = requests.post(
-            f"{settings.MODEL_SERVICE_URL}/auto_segmentation",
-            files=files,
-            data=data,
-            timeout=120
-        )
+            result = post_request_with_files(
+                f"{settings.MODEL_SERVICE_URL}/auto_segmentation",
+                data=data,
+                files=files,
+                timeout=120
+            )
 
-        response.raise_for_status()  
+            masks = result.get("masks")
+            if not masks:
+                raise ValueError("Missing masks in response")
 
-        result = response.json()
-        masks = result.get("masks")
+            mask_paths = save_masks_as_pngs(masks, job_id)
+            update_job_status(job, "done", job.session_id, masks=mask_paths)
+            return mask_paths
 
-        if masks is None:
-            raise ValueError("Missing masks in response")
-        
-        mask_paths = save_masks_as_pngs(masks, job_id=job_id)
+        finally:
+            for f in handles:
+                try:
+                    f.close()
+                except Exception as e:
+                    logger.error(f"Error closing file: {str(e)}")
 
-        update_job_status(
-            job, 
-            "done", 
-            job.session_id, 
-            masks=mask_paths,
-        )
+    except requests.RequestException as e:
+        logger.error(f"API error: {str(e)}")
+        update_job_status(job, "failed", job.session_id)
+        raise self.retry(exc=e, countdown=60)
+    except Exception as e:
+        logger.error(f"Segmentation error: {str(e)}")
+        if not Job.objects.filter(id=job_id).exists():
+            logger.error(f"Job {job_id} does not exist")
+            return
         job.refresh_from_db()
-        return mask_paths
-
-    finally:
-        for f in file_handles:
-            f.close()
+        update_job_status(job, "failed", job.session_id)
+        raise

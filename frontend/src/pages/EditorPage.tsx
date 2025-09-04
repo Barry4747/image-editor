@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import MaskingCanvas from '../components/MaskingCanvas';
-import './styles/EditorPage.css'
+import './styles/EditorPage.css';
 
 interface LocationState {
   imageUrl: string;
@@ -28,6 +28,7 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
   const [upscalers, setUpscalers] = useState<string[]>([]);
   const [selectedUpscaler, setSelectedUpscaler] = useState<string>('');
   const [enableUpscaler, setEnableUpscaler] = useState<boolean>(true);
+  const [scale, setScale] = useState<number>(4); // Default scale = 4x
 
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -79,7 +80,7 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
         const data = await res.json();
         setModels(data.models || []);
         if (data.models?.length > 0) setSelectedModel(data.models[0]);
-        setFinishModels(['None', ...(data.models || [])]); 
+        setFinishModels(['None', ...(data.models || [])]);
         setSelectedFinishModel('None');
       } catch (err) {
         console.error(err);
@@ -131,10 +132,11 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
       if (seed.trim() !== '') formData.append('seed', seed);
       if (selectedFinishModel !== 'None') formData.append('finish_model', selectedFinishModel);
       if (negativePrompt.trim() !== '') formData.append('negative_prompt', negativePrompt);
-      
-      // Add upscaler model if enabled and selected
+
+      // Add upscaler and scale if enabled
       if (enableUpscaler && selectedUpscaler) {
         formData.append('upscaler_model', selectedUpscaler);
+        formData.append('scale', scale.toString()); // 👈 Send scale (e.g., 4)
       }
 
       const response = await fetch('/jobs', {
@@ -273,7 +275,6 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
               </div>
             </div>
 
-
             {/* Model Selection */}
             <div className={`rounded-2xl p-6 transition-all duration-300 ${
               darkMode 
@@ -352,7 +353,7 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Strength: {strength}
+                        Strength: {strength.toFixed(2)}
                       </label>
                       <input
                         type="range"
@@ -374,7 +375,7 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
 
                     <div className="space-y-2">
                       <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Guidance Scale: {guidanceScale}
+                        Guidance Scale: {guidanceScale.toFixed(1)}
                       </label>
                       <input
                         type="range"
@@ -508,34 +509,53 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
                           />
                         </button>
                       </div>
+
                       {enableUpscaler && upscalers.length > 0 && (
-                        <div className="mt-2">
-                          <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                            Select Upscaler
-                          </label>
-                          <select
-                            value={selectedUpscaler}
-                            onChange={(e) => setSelectedUpscaler(e.target.value)}
-                            className={`w-full p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
-                              darkMode 
-                                ? 'bg-gray-700 border-gray-600 text-white' 
-                                : 'bg-white border-gray-300 text-gray-900'
-                            }`}
-                          >
-                            {upscalers.map((upscaler) => (
-                              <option key={upscaler} value={upscaler}>
-                                {upscaler}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                        <>
+                          <div className="mt-2">
+                            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              Select Upscaler
+                            </label>
+                            <select
+                              value={selectedUpscaler}
+                              onChange={(e) => setSelectedUpscaler(e.target.value)}
+                              className={`w-full p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
+                                darkMode 
+                                  ? 'bg-gray-700 border-gray-600 text-white' 
+                                  : 'bg-white border-gray-300 text-gray-900'
+                              }`}
+                            >
+                              {upscalers.map((upscaler) => (
+                                <option key={upscaler} value={upscaler}>
+                                  {upscaler}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="mt-3">
+                            <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              Upscale Factor: {scale}x
+                            </label>
+                            <input
+                              type="range"
+                              min="3"
+                              max="4"
+                              step="1"
+                              value={scale}
+                              onChange={(e) => setScale(parseInt(e.target.value))}
+                              className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                                darkMode 
+                                  ? 'bg-gray-700 slider-dark' 
+                                  : 'bg-gray-200 slider-light'
+                              }`}
+                            />
+                            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Choose how much to upscale the final image (works best with 4)
+                            </p>
+                          </div>
+                        </>
                       )}
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {enableUpscaler 
-                          ? 'Enhance image quality with super-resolution' 
-                          : 'Upscaling disabled'
-                        }
-                      </p>
                     </div>
                   </div>
                 </div>

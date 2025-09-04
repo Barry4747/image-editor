@@ -16,7 +16,8 @@ class RealESRGANUpscaler:
         self.upsampler = None
         self.model_name = None
 
-    def load_model(self, model_path: str, model_name: str = "realesrgan-x4plus", scale: int = 4):
+    def load_model(self, model_path: str, model_name: str = "realesrgan-x4plus", scale: int = 4,
+                   num_block: int = 23, num_feat: int = 64, num_grow_ch: int = 32):
         """
         Load Real-ESRGAN model from a given checkpoint path.
         """
@@ -30,9 +31,9 @@ class RealESRGANUpscaler:
             num_in_ch=3,
             num_out_ch=3,
             scale=scale,
-            num_feat=64,
-            num_block=23,
-            num_grow_ch=32
+            num_feat=num_feat,
+            num_block=num_block,
+            num_grow_ch=num_grow_ch
         )
 
 

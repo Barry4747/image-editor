@@ -153,7 +153,7 @@ class ModelManager:
     
 
     @classmethod
-    def get_upscaler(cls, model_name: str):
+    def get_upscaler(cls, model_name: str, scale: int):
         if model_name not in cls._upscaler_map:
             raise ValueError(f"Unknown upscaler: {model_name}")
         
@@ -175,11 +175,20 @@ class ModelManager:
         model_class = CLASS_MAP[model_class_name]
         instance = model_class()
 
-        instance.load_model(model_path, model_name)
+        num_block = model_info.get("num_block", 23)
+        num_feat = model_info.get("num_feat", 64)
+        num_grow_ch = model_info.get("num_grow_ch", 32)
+
+        instance.load_model(
+            model_path=model_path,
+            model_name=model_name,
+            scale=scale,
+            num_block=num_block,
+            num_feat=num_feat,
+            num_grow_ch=num_grow_ch
+        )
 
         cls._instances[model_name] = instance
-
-
         return cls._instances[model_name]
 
     @classmethod

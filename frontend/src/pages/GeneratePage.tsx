@@ -8,27 +8,27 @@ interface UploadPageProps {
 const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState('');
+  const [negativePrompt, setNegativePrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [sessionId, setSessionId] = useState('dummy-session-id');
-  
-  // Models
+  const [sessionId] = useState('dummy-session-id');
+
+  // Model selection
   const [models, setModels] = useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
-  
-  // Upscalers
+
+  // Upscaler settings
   const [upscalers, setUpscalers] = useState<string[]>([]);
   const [selectedUpscaler, setSelectedUpscaler] = useState<string>('');
   const [enableUpscaler, setEnableUpscaler] = useState<boolean>(true);
+  const [scale, setScale] = useState<number>(4); // Default upscale factor
 
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [guidanceScale, setGuidanceScale] = useState(9.5);
   const [steps, setSteps] = useState(40);
-  const [passes, setPasses] = useState(4);
-  const [seed, setSeed] = useState<string>(''); // empty string = None
+  const [seed, setSeed] = useState<string>('');
   const [width, setWidth] = useState(512);
   const [height, setHeight] = useState(512);
-  const [negativePrompt, setNegativePrompt] = useState('');
 
   // Fetch models
   useEffect(() => {
@@ -40,14 +40,14 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
         setModels(data.models || []);
         if (data.models?.length > 0) setSelectedModel(data.models[0]);
       } catch (err) {
-        console.error(err);
-        // Use default model list if API fails
+        console.error('Failed to fetch models:', err);
+        // Fallback models
         const defaultModels = [
           'stable-diffusion-v1-5',
           'stable-diffusion-xl',
           'dreamshaper',
           'realistic-vision',
-          'deliberate'
+          'deliberate',
         ];
         setModels(defaultModels);
         setSelectedModel(defaultModels[0]);
@@ -56,6 +56,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
     fetchModels();
   }, []);
 
+  // Fetch upscalers
   useEffect(() => {
     const fetchUpscalers = async () => {
       try {
@@ -65,7 +66,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
         setUpscalers(data.upscalers || []);
         if (data.upscalers?.length > 0) setSelectedUpscaler(data.upscalers[0]);
       } catch (err) {
-        console.error(err);
+        console.error('Failed to fetch upscalers:', err);
       }
     };
     fetchUpscalers();
@@ -78,23 +79,22 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
     }
 
     setIsGenerating(true);
-    
     try {
       const formData = new FormData();
       formData.append('prompt', prompt);
       formData.append('model', selectedModel);
-      
-      if (guidanceScale != null) formData.append('guidance_scale', guidanceScale.toString());
-      if (steps != null) formData.append('steps', steps.toString());
-      if (passes != null) formData.append('passes', passes.toString());
-      if (seed.trim() !== '') formData.append('seed', seed);
+
+      if (guidanceScale) formData.append('guidance_scale', guidanceScale.toString());
+      if (steps) formData.append('steps', steps.toString());
+      if (seed.trim()) formData.append('seed', seed);
       if (width) formData.append('width', width.toString());
       if (height) formData.append('height', height.toString());
-      if (negativePrompt.trim() !== '') formData.append('negative_prompt', negativePrompt);
-      
-      // Add upscaler model if enabled and selected
+      if (negativePrompt.trim()) formData.append('negative_prompt', negativePrompt);
+
+      // Add upscaler and scale if enabled
       if (enableUpscaler && selectedUpscaler) {
         formData.append('upscaler_model', selectedUpscaler);
+        formData.append('scale', scale.toString());
       }
 
       const response = await fetch('/jobs', {
@@ -106,8 +106,6 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
       if (!response.ok) throw new Error('Failed to create job');
 
       const data = await response.json();
-      console.log('Job created:', data);
-
       navigate(`/job/${data.job_id}`);
     } catch (err) {
       console.error(err);
@@ -117,7 +115,8 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
     }
   };
 
-  const handleRegenerate = () => {
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     handleSubmit();
   };
 
@@ -137,6 +136,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Controls Section */}
           <div className="space-y-6">
+            {/* Prompt */}
             <div className={`rounded-2xl p-6 transition-all duration-300 ${
               darkMode 
                 ? 'bg-gray-800/80 backdrop-blur-sm shadow-2xl border border-gray-700' 
@@ -154,10 +154,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                 </div>
                 <h2 className="text-xl font-semibold">Text Prompt</h2>
               </div>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                handleSubmit();
-              }}>
+              <form onSubmit={handleFormSubmit}>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
@@ -172,7 +169,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                 <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   Be specific about subjects, styles, colors, lighting, and details for best results
                 </p>
-                
+
                 <div className="mt-4">
                   <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                     Negative Prompt (optional)
@@ -219,9 +216,9 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                     : 'bg-white border-gray-300 text-gray-900'
                 }`}
               >
-                {models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                {models.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
                   </option>
                 ))}
               </select>
@@ -258,9 +255,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                     value={width}
                     onChange={(e) => setWidth(parseInt(e.target.value))}
                     className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                      darkMode 
-                        ? 'bg-gray-700 slider-dark' 
-                        : 'bg-gray-200 slider-light'
+                      darkMode ? 'bg-gray-700 slider-dark' : 'bg-gray-200 slider-light'
                     }`}
                   />
                 </div>
@@ -276,9 +271,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                     value={height}
                     onChange={(e) => setHeight(parseInt(e.target.value))}
                     className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                      darkMode 
-                        ? 'bg-gray-700 slider-dark' 
-                        : 'bg-gray-200 slider-light'
+                      darkMode ? 'bg-gray-700 slider-dark' : 'bg-gray-200 slider-light'
                     }`}
                   />
                 </div>
@@ -328,7 +321,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Guidance Scale: {guidanceScale}
+                        Guidance Scale: {guidanceScale.toFixed(1)}
                       </label>
                       <input
                         type="range"
@@ -338,9 +331,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                         value={guidanceScale}
                         onChange={(e) => setGuidanceScale(parseFloat(e.target.value))}
                         className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                          darkMode 
-                            ? 'bg-gray-700 slider-dark' 
-                            : 'bg-gray-200 slider-light'
+                          darkMode ? 'bg-gray-700 slider-dark' : 'bg-gray-200 slider-light'
                         }`}
                       />
                       <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -360,35 +351,11 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                         value={steps}
                         onChange={(e) => setSteps(parseInt(e.target.value))}
                         className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                          darkMode 
-                            ? 'bg-gray-700 slider-dark' 
-                            : 'bg-gray-200 slider-light'
+                          darkMode ? 'bg-gray-700 slider-dark' : 'bg-gray-200 slider-light'
                         }`}
                       />
                       <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                         More steps = higher quality, longer processing time
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Passes: {passes}
-                      </label>
-                      <input
-                        type="range"
-                        min="1"
-                        max="8"
-                        step="1"
-                        value={passes}
-                        onChange={(e) => setPasses(parseInt(e.target.value))}
-                        className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                          darkMode 
-                            ? 'bg-gray-700 slider-dark' 
-                            : 'bg-gray-200 slider-light'
-                        }`}
-                      />
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        More passes = better quality, longer processing time
                       </p>
                     </div>
 
@@ -419,12 +386,8 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                           type="button"
                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                             enableUpscaler 
-                              ? darkMode 
-                                ? 'bg-blue-600' 
-                                : 'bg-blue-500' 
-                              : darkMode 
-                                ? 'bg-gray-600' 
-                                : 'bg-gray-300'
+                              ? darkMode ? 'bg-blue-600' : 'bg-blue-500' 
+                              : darkMode ? 'bg-gray-600' : 'bg-gray-300'
                           }`}
                           onClick={() => setEnableUpscaler(!enableUpscaler)}
                         >
@@ -435,34 +398,51 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                           />
                         </button>
                       </div>
+
                       {enableUpscaler && upscalers.length > 0 && (
-                        <div className="mt-2">
-                          <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                            Select Upscaler
-                          </label>
-                          <select
-                            value={selectedUpscaler}
-                            onChange={(e) => setSelectedUpscaler(e.target.value)}
-                            className={`w-full p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
-                              darkMode 
-                                ? 'bg-gray-700 border-gray-600 text-white' 
-                                : 'bg-white border-gray-300 text-gray-900'
-                            }`}
-                          >
-                            {upscalers.map((upscaler) => (
-                              <option key={upscaler} value={upscaler}>
-                                {upscaler}
-                              </option>
-                            ))}
-                          </select>
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              Select Upscaler
+                            </label>
+                            <select
+                              value={selectedUpscaler}
+                              onChange={(e) => setSelectedUpscaler(e.target.value)}
+                              className={`w-full p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 ${
+                                darkMode 
+                                  ? 'bg-gray-700 border-gray-600 text-white' 
+                                  : 'bg-white border-gray-300 text-gray-900'
+                              }`}
+                            >
+                              {upscalers.map((upscaler) => (
+                                <option key={upscaler} value={upscaler}>
+                                  {upscaler}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                              Upscale Factor: {scale}x
+                            </label>
+                            <input
+                              type="range"
+                              min="3"
+                              max="4"
+                              step="1"
+                              value={scale}
+                              onChange={(e) => setScale(parseInt(e.target.value))}
+                              className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
+                                darkMode ? 'bg-gray-700 slider-dark' : 'bg-gray-200 slider-light'
+                              }`}
+                            />
+                            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                              Choose how much to upscale the final image (works best with 4)
+                            </p>
+                          </div>
                         </div>
                       )}
-                      <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {enableUpscaler 
-                          ? 'Enhance image quality with super-resolution' 
-                          : 'Upscaling disabled'
-                        }
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -499,82 +479,44 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
             </button>
           </div>
 
-          {/* Preview Section */}
-          <div>
-            <div className={`rounded-2xl overflow-hidden transition-all duration-300 ${
-              darkMode 
-                ? 'bg-gray-800/80 backdrop-blur-sm shadow-2xl border border-gray-700' 
-                : 'bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100'
-            }`}>
-              <div className="p-6">
-                <div className="flex items-center mb-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                    darkMode 
-                      ? 'bg-blue-900/30 text-blue-400' 
-                      : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-xl font-semibold">Generated Image</h2>
-                </div>
-                
-                <div className={`relative rounded-lg overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-gray-100'} min-h-96 flex items-center justify-center`}>
-                  <div className="text-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-16 w-16 mx-auto mb-4 ${darkMode ? 'text-gray-600' : 'text-gray-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className={darkMode ? 'text-gray-400' : 'text-gray-500'}>
-                      Your generated image will appear here
-                    </p>
-                    <p className={`text-sm mt-2 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-                      Enter a prompt and click "Generate Image" to get started
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Tips */}
-            <div className={`mt-6 rounded-2xl p-6 transition-all duration-300 ${
-              darkMode 
-                ? 'bg-gray-800/80 backdrop-blur-sm shadow-2xl border border-gray-700' 
-                : 'bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100'
-            }`}>
-              <h3 className="text-lg font-semibold mb-3 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 mr-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                Tips for Better Results
-              </h3>
-              <ul className={`space-y-2 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                <li className="flex items-start">
-                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full mr-2 mt-0.5 text-xs ${
-                    darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
-                  }`}>1</span>
-                  Be specific about subjects, styles, and details
-                </li>
-                <li className="flex items-start">
-                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full mr-2 mt-0.5 text-xs ${
-                    darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
-                  }`}>2</span>
-                  Include artistic styles (e.g., "oil painting", "cyberpunk", "watercolor")
-                </li>
-                <li className="flex items-start">
-                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full mr-2 mt-0.5 text-xs ${
-                    darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
-                  }`}>3</span>
-                  Specify lighting conditions (e.g., "golden hour", "neon lighting")
-                </li>
-                <li className="flex items-start">
-                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full mr-2 mt-0.5 text-xs ${
-                    darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
-                  }`}>4</span>
-                  Use negative prompts to exclude unwanted elements
-                </li>
-              </ul>
-            </div>
+          {/* Tips */}
+          <div className={`mt-6 rounded-2xl p-6 transition-all duration-300 ${
+            darkMode 
+              ? 'bg-gray-800/80 backdrop-blur-sm shadow-2xl border border-gray-700' 
+              : 'bg-white/90 backdrop-blur-sm shadow-xl border border-gray-100'
+          }`}>
+            <h3 className="text-lg font-semibold mb-3 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 mr-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              Tips for Better Results
+            </h3>
+            <ul className={`space-y-2 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              <li className="flex items-start">
+                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full mr-2 mt-0.5 text-xs ${
+                  darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                }`}>1</span>
+                Be specific about subjects, styles, and details
+              </li>
+              <li className="flex items-start">
+                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full mr-2 mt-0.5 text-xs ${
+                  darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                }`}>2</span>
+                Include artistic styles (e.g., "oil painting", "cyberpunk", "watercolor")
+              </li>
+              <li className="flex items-start">
+                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full mr-2 mt-0.5 text-xs ${
+                  darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                }`}>3</span>
+                Specify lighting conditions (e.g., "golden hour", "neon lighting")
+              </li>
+              <li className="flex items-start">
+                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full mr-2 mt-0.5 text-xs ${
+                  darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-600'
+                }`}>4</span>
+                Use negative prompts to exclude unwanted elements
+              </li>
+            </ul>
           </div>
         </div>
       </div>

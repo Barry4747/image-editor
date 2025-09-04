@@ -73,7 +73,13 @@ upscalers:
   realesrgan-x4plus:
     class: RealESRGANUpscalerWrapper
     path: C:\Users\Bartek\AImodels\Upscalers\RealESRGAN_x4plus.pth
+    num_block: 23
+    num_feat: 64
+    num_grow_ch: 32
 
   realesrgan-x4plus_anime_6B:
     class: RealESRGANUpscalerWrapper
     path: C:\Users\Bartek\AImodels\Upscalers\RealESRGAN_x4plus_anime_6B.pth
+    num_block: 6
+    num_feat: 64
+    num_grow_ch: 32

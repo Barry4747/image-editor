@@ -1,6 +1,6 @@
 from django.shortcuts import render
-from rest_framework import views
-from .serializers import JobSerializer
+from rest_framework import views, viewsets
+from .serializers import GalleryJobSerializer
 from rest_framework.response import Response
 from rest_framework import status
 from .tasks import process_job, send_progress, process_segmentation, generate_image
@@ -10,16 +10,19 @@ from rest_framework.decorators import api_view
 import requests
 from django.conf import settings
 from .session_history import add_event
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from .session_history import get_history, clear_history
-from rest_framework.permissions import IsAuthenticated
-
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from .permissions import IsOwnerOrGuest
 
 
 class CreateJobView(views.APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
     def post(self, request):
         user = request.user if request.user.is_authenticated else None
-        session_id = request.headers.get("X-Session-ID") if not user else ""
+        session_id = request.headers.get("X-Session-ID")
         if not session_id:
             return Response({"error": "Session ID is required."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -37,8 +40,8 @@ class CreateJobView(views.APIView):
         finish_model = request.data.get('finish_model', None)
 
         # upscaler
-        scale = request.data.get('scale', 4)
         upscaler_model = request.data.get('upscaler_model')
+        
         job = Job.objects.create(
             user=user,
             session_id=session_id,
@@ -54,7 +57,6 @@ class CreateJobView(views.APIView):
             seed=seed,
             finish_model=finish_model,
             upscale_model=upscaler_model,
-            scale=scale
         )
         add_event(session_id, {"type": "created", "job_id": job.id, "model": job.model})
 
@@ -168,10 +170,37 @@ def clear_session_history_view(request):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsOwnerOrGuest])
 def claim_session_jobs(request):
     session_id = request.data.get("session_id")
     if not session_id:
         return Response({"error": "session_id required"}, status=400)
     updated = Job.objects.filter(session_id=session_id, user__isnull=True).update(user=request.user)
     return Response({"moved": updated})
+
+
+# gallery views
+
+class GalleryViewSet(viewsets.ModelViewSet):
+    serializer_class = GalleryJobSerializer
+    permission_classes = [IsOwnerOrGuest]
+
+    def get_queryset(self):
+        user = self.request.user
+        session_id = self.request.headers.get("X-Session-ID")
+        logging.info(f"user: {user}, session: {session_id}")
+        if user.is_authenticated:
+            return Job.objects.filter(user=user, output__isnull=False).order_by("-created_at")
+        elif session_id:
+            return Job.objects.filter(session_id=session_id, output__isnull=False).order_by("-created_at")
+        return Job.objects.none()
+
+    def perform_create(self, serializer):
+        """
+        Allow manual creation of a Job (not always needed if Jobs powstają w backendzie pipeline).
+        """
+        if self.request.user.is_authenticated:
+            serializer.save(user=self.request.user)
+        else:
+            session_id = self.request.headers.get("X-Session-ID")
+            serializer.save(session_id=session_id)

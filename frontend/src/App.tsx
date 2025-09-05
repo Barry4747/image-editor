@@ -11,15 +11,14 @@ import { AuthProvider } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { initSessionId } from './utils/session';
+import GalleryPage from "./pages/GalleryPage";
 
 const AppContent = () => {
   const [darkMode, setDarkMode] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    if (!localStorage.getItem('access')) {
-      initSessionId();
-    }
+    initSessionId();
   }, []);
 
   useEffect(() => {
@@ -57,6 +56,7 @@ const AppContent = () => {
           <Route path="/text-to-image" element={<TextToImagePage darkMode={darkMode} />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/gallery" element={<GalleryPage />} />
         </Routes>
       </main>
 

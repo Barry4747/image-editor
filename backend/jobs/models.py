@@ -24,14 +24,13 @@ class Job(models.Model):
 
     #for upscaling
     upscale_model = models.CharField(null=True, blank=True)
-    scale = models.IntegerField(default=4)
 
     #identification
     session_id = models.CharField(max_length=100, db_index=True, blank=True)
     user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="jobs")
 
     def __str__(self):
-        return f"Job {self.id} - {self.status}"
+        return f"Job {self.id} - {self.status} - {self.user} - {self.session_id} - {self.image}"
 
 
 class JobEvent(models.Model):

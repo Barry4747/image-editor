@@ -132,14 +132,14 @@ def prepare_files_for_job(job):
         raise
 
 
-def upscale_image(output_image_path, model, scale=4):
+def upscale_image(output_image_path, model):
     """Upscale image via model service."""
     if not os.path.exists(output_image_path):
         raise FileNotFoundError(f"Output file not found: {output_image_path}")
 
     with open(output_image_path, 'rb') as f:
         files = {'image': (os.path.basename(output_image_path), f, 'image/png')}
-        data = {"model": model, "scale": scale}
+        data = {"model": model}
         return post_request_with_files(
             f"{settings.MODEL_SERVICE_URL}/upscale",
             data=data,
@@ -171,7 +171,7 @@ def handle_output_and_upscale(job, output_url, progress_step=80):
     upscaled_output_url = formatted_url
     if job.upscale_model:
         try:
-            upscale_result = upscale_image(output_image_path, job.upscale_model, job.scale or 4)
+            upscale_result = upscale_image(output_image_path, job.upscale_model)
             upscaled_output_url = format_output_url(upscale_result.get("output_url"))
             upscaled_relative_path = upscaled_output_url.replace(settings.MEDIA_URL, "").lstrip("/")
             job.output.name = upscaled_relative_path

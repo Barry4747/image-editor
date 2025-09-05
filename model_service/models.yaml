@@ -76,6 +76,7 @@ upscalers:
     num_block: 23
     num_feat: 64
     num_grow_ch: 32
+    scale: 4
 
   realesrgan-x4plus_anime_6B:
     class: RealESRGANUpscalerWrapper
@@ -83,3 +84,4 @@ upscalers:
     num_block: 6
     num_feat: 64
     num_grow_ch: 32
+    scale: 4

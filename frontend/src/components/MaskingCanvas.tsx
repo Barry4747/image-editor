@@ -334,10 +334,10 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
       const formData = new FormData();
       formData.append("image", blob, "image.png");
       formData.append("model", "sam-vit-h");
-
+      const sessionId = localStorage.getItem("session_id");
       const res = await fetch("/api/get_masks", {
         method: "POST",
-        headers: { "X-Session-ID": "my-session-id" },
+        headers: {...(sessionId ? { "X-Session-ID": sessionId } : {}),},
         body: formData,
       });
       if (!res.ok) {

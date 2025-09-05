@@ -20,12 +20,11 @@ router = APIRouter()
 async def upscale_image(
     image: UploadFile = File(...),
     model: str = Form("realesrgan-x4plus"),
-    scale: int = Form(4)
 ):
     img_bytes = await image.read()
     pil_image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-    model = ModelManager.get_upscaler(model_name=model, scale=scale)
-    upscaled = model.upscale(pil_image, scale)
+    model = ModelManager.get_upscaler(model_name=model)
+    upscaled = model.upscale(pil_image)
 
     
 

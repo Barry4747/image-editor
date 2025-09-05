@@ -26,7 +26,7 @@ class RealESRGANUpscaler:
 
         if not model_path or not model_path.endswith('.pth'):
             raise ValueError("model_path cannot be None or empty and should end with .pth")
-
+        self.scale = scale
         model = RRDBNet(
             num_in_ch=3,
             num_out_ch=3,
@@ -60,7 +60,7 @@ class RealESRGANUpscaler:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    def upscale(self, image: Image.Image, scale: int = 4) -> Image.Image:
+    def upscale(self, image: Image.Image) -> Image.Image:
         """
         Upscale a PIL image and return the result as a PIL image.
 
@@ -75,6 +75,6 @@ class RealESRGANUpscaler:
             raise RuntimeError("Model not loaded. Call load() first.")
 
         img_array = np.array(image.convert("RGB"))
-        output, _ = self.upsampler.enhance(img_array, outscale=scale)
+        output, _ = self.upsampler.enhance(img_array, outscale=self.scale)
 
         return Image.fromarray(output)

@@ -44,7 +44,7 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
   const [showMask, setShowMask] = useState(false);
 
   useEffect(() => {
-    let sessionId = localStorage.getItem('sessionId') || 'dummy-session-id';
+    let sessionId = localStorage.getItem('session_id') || 'dummy-session-id';
     let ws: WebSocket | null = null;
     let reconnectTimer: NodeJS.Timeout | null = null;
 

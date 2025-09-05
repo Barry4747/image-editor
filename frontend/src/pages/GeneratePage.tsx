@@ -10,7 +10,6 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [sessionId] = useState('dummy-session-id');
 
   // Model selection
   const [models, setModels] = useState<string[]>([]);
@@ -20,7 +19,6 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
   const [upscalers, setUpscalers] = useState<string[]>([]);
   const [selectedUpscaler, setSelectedUpscaler] = useState<string>('');
   const [enableUpscaler, setEnableUpscaler] = useState<boolean>(true);
-  const [scale, setScale] = useState<number>(4); // Default upscale factor
 
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -94,12 +92,16 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
       // Add upscaler and scale if enabled
       if (enableUpscaler && selectedUpscaler) {
         formData.append('upscaler_model', selectedUpscaler);
-        formData.append('scale', scale.toString());
       }
-
+      
+      const token = localStorage.getItem("access");
+      const sessionId = localStorage.getItem("session_id")
       const response = await fetch('/jobs', {
         method: 'POST',
-        headers: { 'X-Session-ID': sessionId },
+        headers: {
+          ...(sessionId ? { "X-Session-ID": sessionId } : {}),
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: formData,
       });
 
@@ -420,26 +422,6 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
                                 </option>
                               ))}
                             </select>
-                          </div>
-
-                          <div>
-                            <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                              Upscale Factor: {scale}x
-                            </label>
-                            <input
-                              type="range"
-                              min="3"
-                              max="4"
-                              step="1"
-                              value={scale}
-                              onChange={(e) => setScale(parseInt(e.target.value))}
-                              className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${
-                                darkMode ? 'bg-gray-700 slider-dark' : 'bg-gray-200 slider-light'
-                              }`}
-                            />
-                            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                              Choose how much to upscale the final image (works best with 4)
-                            </p>
                           </div>
                         </div>
                       )}

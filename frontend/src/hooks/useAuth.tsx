@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import axios from "axios";
+import { useNavigate } from 'react-router-dom';
 
 const API_URL = "/api/users";
 
@@ -26,6 +27,7 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -54,6 +56,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
     setUser(null);
+    navigate("/")
   }
 
   return (

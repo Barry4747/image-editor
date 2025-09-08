@@ -31,5 +31,4 @@ export async function claimJobs() {
   const sessionId = localStorage.getItem("session_id");
   if (!sessionId) return;
   await client.post("/jobs/claim", { session_id: sessionId });
-  localStorage.removeItem("session_id");
 }

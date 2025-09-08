@@ -18,11 +18,11 @@ from .permissions import IsOwnerOrGuest
 
 class CreateJobView(views.APIView):
     permission_classes = [AllowAny]
-    authentication_classes = []
 
     def post(self, request):
         user = request.user if request.user.is_authenticated else None
         session_id = request.headers.get("X-Session-ID")
+        logging.info(f"user: {user} id: {session_id}")
         if not session_id:
             return Response({"error": "Session ID is required."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -190,6 +190,7 @@ class GalleryViewSet(viewsets.ModelViewSet):
         session_id = self.request.headers.get("X-Session-ID")
         logging.info(f"user: {user}, session: {session_id}")
         if user.is_authenticated:
+            logging.info("User authenticated")
             return Job.objects.filter(user=user, output__isnull=False).order_by("-created_at")
         elif session_id:
             return Job.objects.filter(session_id=session_id, output__isnull=False).order_by("-created_at")

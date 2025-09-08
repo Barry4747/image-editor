@@ -46,6 +46,7 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
     }
 
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.src = state.imageUrl;
     img.onload = () => {
       const MAX_WIDTH = 1024;

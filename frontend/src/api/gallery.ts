@@ -18,7 +18,7 @@ export async function deleteJob(id: number) {
   const token = localStorage.getItem("access");
   const sessionId = localStorage.getItem("session_id");
 
-  return axios.delete(`${API_URL}${id}/`, {
+  return axios.delete(`${API_URL}/${id}/`, {
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(sessionId ? { "X-Session-ID": sessionId } : {}),

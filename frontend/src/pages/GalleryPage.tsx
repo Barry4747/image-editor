@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchGallery, deleteJob, updateJob } from "../api/gallery";
+import { useNavigate } from 'react-router-dom';
 
 interface Job {
   id: number;
@@ -9,6 +10,7 @@ interface Job {
 }
 
 export default function GalleryPage() {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [editing, setEditing] = useState<Job | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -31,6 +33,17 @@ export default function GalleryPage() {
   async function handleDelete(id: number) {
     await deleteJob(id);
     setJobs(jobs.filter((j) => j.id !== id));
+  }
+
+  async function handleEdit() {
+    if (editing) {
+      console.log(editing)
+      navigate('/editor', { 
+        state: { 
+          imageUrl: editing.output 
+        } 
+      });
+    }
   }
 
   async function handleSaveEdit() {
@@ -95,8 +108,7 @@ export default function GalleryPage() {
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditing(job);
-                      setEditTitle(job.title || "");
-                      setEditDesc(job.description || "");
+                      handleEdit();
                     }}
                     className="flex-1 text-xs py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition"
                   >
@@ -148,46 +160,7 @@ export default function GalleryPage() {
         </div>
       )}
 
-      {editing && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
-          <div
-            className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-full max-w-md"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-xl font-bold mb-4 text-gray-800 dark:text-white">
-              Edit Image
-            </h2>
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              placeholder="Title"
-              className="w-full mb-3 p-2 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-800 dark:text-white"
-            />
-            <textarea
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
-              placeholder="Description"
-              rows={3}
-              className="w-full mb-4 p-2 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-800 dark:text-white resize-none"
-            />
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setEditing(null)}
-                className="px-4 py-1.5 rounded bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                className="px-4 py-1.5 rounded bg-green-600 hover:bg-green-700 text-white transition"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }

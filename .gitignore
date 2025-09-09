@@ -4,3 +4,5 @@ run.bat
 media
 test.py
 db.sqlite3
+lustify_sdxl.py
+models.yaml

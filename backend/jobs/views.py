@@ -81,12 +81,21 @@ def job_progress(request):
     job_id = request.data.get('job_id')
     progress = request.data.get('progress')
     output_url = request.data.get('output_url')
+    event = request.data.get('event')
+
+    if not event:
+        event = "progress"
 
     job = Job.objects.filter(id=job_id).first()
     if not job:
         return Response({"error": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
     
-    send_progress(job.session_id, "progress", job_id=job.id, progress=progress, preview_url=output_url)
+    kwargs = {}
+
+    if output_url:
+        kwargs['preview_url'] = output_url
+
+    send_progress(job.session_id, event, job_id=job.id, progress=progress, **kwargs)
 
     return Response({"message": "Progress updated successfully."}, status=status.HTTP_200_OK)
 
@@ -146,6 +155,8 @@ def get_masks_status(request, job_id):
     else:
         return Response({"status": "processing"}, status=202)
     
+
+# user views
 
 def _require_session(request):
     sid = request.headers.get("X-Session-ID")

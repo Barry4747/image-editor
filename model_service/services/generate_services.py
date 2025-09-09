@@ -47,6 +47,7 @@ def generate_image_file(
         )
 
     current_img = model_instance.generate_image(
+        job_id = job_id,
         prompt=prompt,
         negative_prompt=negative_prompt,
         guidance_scale=guidance_scale,

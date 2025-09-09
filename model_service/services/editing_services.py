@@ -138,6 +138,7 @@ def process_image_file(
         iter_seed = seed + i if seed is not None else None
 
         current_img = model_instance.generate_image(
+            job_id=job_id,
             init_image=current_img,
             mask_image=mask_to_use,
             prompt=cur_prompt,

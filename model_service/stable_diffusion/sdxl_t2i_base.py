@@ -12,6 +12,7 @@ from diffusers import (
 from torchvision import transforms
 from fastapi import HTTPException
 import logging
+from stable_diffusion.callback import callback 
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,7 @@ class SDXLTextToImageModel:
     def generate_image(
         self,
         *,
+        job_id,
         prompt: str,
         negative_prompt: str = (
             "cartoon, painting, illustration, (worst quality, low quality, normal quality:2), "
@@ -164,7 +166,7 @@ class SDXLTextToImageModel:
             # Here we assume model was trained with Clip Skip = 1 (common in epiCRealism)
 
             logger.info(f"Generating image: {width}x{height}, Prompt: {prompt[:50]}...")
-
+            self.pipeline.scheduler.set_timesteps(steps)
             result = self.pipeline(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -174,6 +176,7 @@ class SDXLTextToImageModel:
                 guidance_scale=guidance_scale,
                 generator=generator,
                 output_type="pil",
+                callback_on_step_end=callback(job_id=job_id, num_steps=len(self.pipeline.scheduler.timesteps)),
             )
 
             image: Image.Image = result.images[0]

@@ -12,6 +12,7 @@ from diffusers import (
 from torchvision import transforms
 from fastapi import HTTPException
 import logging
+from stable_diffusion.callback import callback 
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +104,7 @@ class SDXLInpaintModel:
     def generate_image(
         self,
         *,
+        job_id,
         prompt: str,
         negative_prompt: str = "grain, noise, lowres, worst quality, low quality, jpeg artifacts, blurry, deformed",
         init_image: Optional[Image.Image] = None,
@@ -139,6 +141,7 @@ class SDXLInpaintModel:
             generator = torch.Generator(device=self.device).manual_seed(seed)
 
         try:
+            self.pipeline.scheduler.set_timesteps(steps)
             result = self.pipeline(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -151,6 +154,7 @@ class SDXLInpaintModel:
                 width=width,
                 height=height,
                 output_type="pil",
+                callback_on_step_end=callback(job_id=job_id, num_steps=len(self.pipeline.scheduler.timesteps)),
             )
 
             gen = result.images[0]

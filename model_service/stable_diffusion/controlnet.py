@@ -13,6 +13,7 @@ from diffusers import (
 )
 from fastapi import HTTPException
 import logging
+from stable_diffusion.callback import callback 
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +142,7 @@ class ControlNet:
     def generate_image(
         self,
         *,
+        job_id,
         prompt: str,
         init_image: Image.Image,
         mask_image: Image.Image,
@@ -189,6 +191,7 @@ class ControlNet:
             generator = torch.Generator(device=self.device).manual_seed(seed)
 
         try:
+            self.pipeline.scheduler.set_timesteps(steps)
             kwargs = dict(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -198,6 +201,7 @@ class ControlNet:
                 guidance_scale=guidance_scale,
                 strength=strength,  
                 generator=generator,
+                callback_on_step_end=callback(job_id=job_id, num_steps=len(self.pipeline.scheduler.timesteps)),
             )
 
             if self.use_controlnet and self._controlnet_loaded:

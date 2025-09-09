@@ -34,7 +34,8 @@ interface JobProgressPageProps {
 export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
   const { jobId } = useParams();
   const [progress, setProgress] = useState<number>(0);
-  const [status, setStatus] = useState<'created' | 'processing' | 'upscaling' | 'done'>('created');
+  const [stepProgress, setStepProgress] = useState<number>(0);
+  const [status, setStatus] = useState<'created' | 'processing' | 'upscaling' | 'done' | 'failed'>('created');
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -42,6 +43,11 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
   const [showInfo, setShowInfo] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [showMask, setShowMask] = useState(false);
+
+  // Empty handler for failed event
+  const handleFailed = () => {
+    // Implementation for failed event will go here
+  };
 
   useEffect(() => {
     let sessionId = localStorage.getItem('session_id') || 'dummy-session-id';
@@ -60,31 +66,45 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
         ws.onmessage = (e) => {
           const data: ProgressEvent = JSON.parse(e.data);
           if (data.job_id !== Number(jobId)) return;
-
+          
           switch (data.event) {
             case 'created':
               setStatus('created');
               setProgress(0);
+              setStepProgress(0);
               break;
 
             case 'progress':
               setStatus('processing');
               if (data.progress !== undefined) setProgress(data.progress * 100);
               if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
-              console.log(outputUrl)
               break;
             
             case 'upscaling':
               setStatus('upscaling');
               if (data.progress !== undefined) setProgress(data.progress * 100);
               if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
-              console.log(data)
               break;
+              
+            case 'step-end':
+              if (data.progress !== undefined) {
+                setStepProgress(data.progress * 100);
+                console.log(stepProgress)
+              }
+              // Reset step progress after a short delay
+              break;
+              
+            case 'failed':
+              setStatus('failed');
+              handleFailed();
+              break;
+              
             case 'done':
               setStatus('done');
               setProgress(100);
+              setStepProgress(0);
               if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
-              console.log(data)
+              
               // Extract job data from the response
               if (data.job_data) {
                 const jobInfo: JobData = {
@@ -159,6 +179,8 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
         return darkMode ? 'text-purple-400' : 'text-purple-600';
       case 'done':
         return darkMode ? 'text-green-400' : 'text-green-600';
+      case 'failed':
+        return darkMode ? 'text-red-400' : 'text-red-600';
       default:
         return darkMode ? 'text-gray-400' : 'text-gray-600';
     }
@@ -188,6 +210,12 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
         return (
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        );
+      case 'failed':
+        return (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         );
       default:
@@ -282,47 +310,74 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
                     {status === 'processing' && 'Processing'}
                     {status === 'upscaling' && 'Upscaling'}
                     {status === 'done' && 'Completed'}
+                    {status === 'failed' && 'Failed'}
                   </span>
                   
                   <div className={`text-sm px-3 py-1 rounded-full ${
                     darkMode 
                       ? status === 'done' 
                         ? 'bg-green-900/30 text-green-400' 
-                        : status === 'upscaling'
-                          ? 'bg-purple-900/30 text-purple-400'
-                          : 'bg-yellow-900/30 text-yellow-400'
+                        : status === 'failed'
+                          ? 'bg-red-900/30 text-red-400'
+                          : status === 'upscaling'
+                            ? 'bg-purple-900/30 text-purple-400'
+                            : 'bg-yellow-900/30 text-yellow-400'
                       : status === 'done' 
                         ? 'bg-green-100 text-green-700' 
-                        : status === 'upscaling'
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-yellow-100 text-yellow-700'
+                        : status === 'failed'
+                          ? 'bg-red-100 text-red-700'
+                          : status === 'upscaling'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-yellow-100 text-yellow-700'
                   }`}>
                     {status.charAt(0).toUpperCase() + status.slice(1)}
                   </div>
                 </div>
 
                 {(status === 'processing' || status === 'upscaling') && (
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
-                        Progress
-                      </span>
-                      <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
-                        {Math.round(progress)}%
-                      </span>
-                    </div>
-                    <div className={`h-3 rounded-full overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                      <div
-                        className={`h-full transition-all duration-300 ease-out ${
-                          status === 'processing' 
-                            ? 'bg-gradient-to-r from-blue-500 to-purple-500' 
-                            : 'bg-gradient-to-r from-purple-500 to-pink-500'
-                        }`}
-                        style={{ width: `${progress}%` }}
-                      />
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
+                          Overall Progress
+                        </span>
+                        <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
+                          {Math.round(progress)}%
+                        </span>
+                      </div>
+                      <div className={`h-3 rounded-full overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                        <div
+                          className={`h-full transition-all duration-300 ease-out ${
+                            status === 'processing' 
+                              ? 'bg-gradient-to-r from-blue-500 to-purple-500' 
+                              : 'bg-gradient-to-r from-purple-500 to-pink-500'
+                          }`}
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
+
+                {(stepProgress > 0 && status !== 'done' ) && (
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
+                            Step Progress
+                          </span>
+                          <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
+                            {Math.round(stepProgress)}%
+                          </span>
+                        </div>
+                        <div className={`h-2 rounded-full overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                          <div
+                            className="h-full bg-gradient-to-r from-green-500 to-blue-500 transition-all duration-300 ease-out"
+                            style={{ width: `${stepProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
 
                 {status === 'done' && (
                   <div className="flex items-center p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg text-sm">
@@ -330,6 +385,15 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     Image generation completed successfully!
+                  </div>
+                )}
+                
+                {status === 'failed' && (
+                  <div className="flex items-center p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Image generation failed. Please try again.
                   </div>
                 )}
               </div>
@@ -495,8 +559,10 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
               <ul className={`list-disc list-inside text-sm space-y-1 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                 <li><strong>Created:</strong> Your job has been received and queued for processing</li>
                 <li><strong>Processing:</strong> AI is generating your image based on your prompt and mask</li>
+                <li><strong>Step Progress:</strong> Shows progress within the current processing step</li>
                 <li><strong>Upscaling:</strong> Enhancing the image quality and resolution</li>
                 <li><strong>Completed:</strong> Your image is ready for download</li>
+                <li><strong>Failed:</strong> Something went wrong during generation</li>
               </ul>
             </div>
           </div>

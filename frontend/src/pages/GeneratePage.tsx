@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import client from "../api/axiosClient";
 
 interface UploadPageProps {
   darkMode: boolean;
@@ -94,21 +95,18 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
         formData.append('upscaler_model', selectedUpscaler);
       }
       
-      const token = localStorage.getItem("access");
       const sessionId = localStorage.getItem("session_id")
-      const response = await fetch('/jobs', {
-        method: 'POST',
-        headers: {
-          ...(sessionId ? { "X-Session-ID": sessionId } : {}),
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: formData,
-      });
+      try {
+        const response = await client.post("/jobs", formData, {
+          headers: sessionId ? { "X-Session-ID": sessionId } : {},
+        });
 
-      if (!response.ok) throw new Error('Failed to create job');
+        const data = response.data;
+        navigate(`/job/${data.job_id}`);
+      } catch (err) {
+        console.error("Failed to create job:", err);
+      }
 
-      const data = await response.json();
-      navigate(`/job/${data.job_id}`);
     } catch (err) {
       console.error(err);
       alert('Error creating job');

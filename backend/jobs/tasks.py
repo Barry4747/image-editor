@@ -148,7 +148,7 @@ def upscale_image(output_image_path, model):
         )
 
 
-def handle_output_and_upscale(job, output_url, progress_step=80):
+def handle_output_and_upscale(job, output_url, progress_step=0.99):
     """Save output, optionally upscale, and update job."""
     formatted_url = format_output_url(output_url)
     relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")

@@ -1,10 +1,9 @@
 import client from "./axiosClient";
-import axios from "axios";
 
 const API_URL = "/api";
 
 export async function register(username: string, email: string, password: string, password2: string) {
-  const res = await axios.post(`${API_URL}/users/register/`, {
+  const res = await client.post(`${API_URL}/users/register/`, {
     username,
     email,
     password,
@@ -14,7 +13,7 @@ export async function register(username: string, email: string, password: string
 }
 
 export async function fetchUser(token: string) {
-  const res = await axios.get(`${API_URL}/users/me/`, {
+  const res = await client.get(`${API_URL}/users/me/`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   return res.data; 

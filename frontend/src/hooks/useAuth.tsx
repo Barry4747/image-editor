@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import axios from "axios";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
+import client from "../api/axiosClient"; // import klienta z interceptorami
 
 const API_URL = "/api/users";
 
@@ -16,6 +16,7 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   loading: boolean;
   logout: () => void;
+  client: typeof client; // dodajemy klienta do contextu, aby korzystać w całej aplikacji
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,17 +31,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem("access");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     const fetchUser = async () => {
       try {
-        const res = await axios.get(`${API_URL}/me/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await client.get(`${API_URL}/me/`);
         setUser(res.data);
       } catch {
         setUser(null);
@@ -52,15 +45,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     fetchUser();
   }, []);
 
-  function logout() {
+  const logout = () => {
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
     setUser(null);
-    navigate("/")
-  }
+    navigate("/login");
+  };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, logout }}>
+    <AuthContext.Provider value={{ user, setUser, loading, logout, client }}>
       {children}
     </AuthContext.Provider>
   );

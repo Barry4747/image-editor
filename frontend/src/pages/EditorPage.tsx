@@ -1,19 +1,21 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import MaskingCanvas from '../components/MaskingCanvas';
+import client from '../api/axiosClient';
 import './styles/EditorPage.css';
 
 interface LocationState {
   imageUrl: string;
 }
 
-interface UploadPageProps {
+interface EditorPageProps {
   darkMode: boolean;
 }
 
-const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
+const EditorPage: React.FC<EditorPageProps> = ({ darkMode }) => {
   const { state } = useLocation() as { state: LocationState };
   const navigate = useNavigate();
+
   const [baseImage, setBaseImage] = useState<HTMLImageElement | null>(null);
   const [prompt, setPrompt] = useState('');
   const [maskData, setMaskData] = useState('');
@@ -26,7 +28,7 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
   // Upscalers
   const [upscalers, setUpscalers] = useState<string[]>([]);
   const [selectedUpscaler, setSelectedUpscaler] = useState<string>('');
-  const [enableUpscaler, setEnableUpscaler] = useState<boolean>(true);
+  const [enableUpscaler, setEnableUpscaler] = useState(true);
 
   // Advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -34,11 +36,12 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
   const [guidanceScale, setGuidanceScale] = useState(9.5);
   const [steps, setSteps] = useState(40);
   const [passes, setPasses] = useState(4);
-  const [seed, setSeed] = useState<string>(''); // empty string = None
+  const [seed, setSeed] = useState('');
   const [finishModels, setFinishModels] = useState<string[]>([]);
-  const [selectedFinishModel, setSelectedFinishModel] = useState<string>('None'); // default None
+  const [selectedFinishModel, setSelectedFinishModel] = useState('None');
   const [negativePrompt, setNegativePrompt] = useState('');
 
+  // Load image from state
   useEffect(() => {
     if (!state?.imageUrl) {
       navigate('/');
@@ -46,15 +49,15 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
     }
 
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    img.crossOrigin = 'anonymous';
     img.src = state.imageUrl;
     img.onload = () => {
       const MAX_WIDTH = 1024;
       const MAX_HEIGHT = 1024;
       let { width, height } = img;
       const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height, 1);
-      width = width * ratio;
-      height = height * ratio;
+      width *= ratio;
+      height *= ratio;
 
       const canvas = document.createElement('canvas');
       canvas.width = width;
@@ -74,48 +77,46 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const res = await fetch('/api/models/');
-        if (!res.ok) throw new Error('Failed to fetch models');
-        const data = await res.json();
-        setModels(data.models || []);
-        if (data.models?.length > 0) setSelectedModel(data.models[0]);
-        setFinishModels(['None', ...(data.models || [])]);
+        const res = await client.get('/api/models/');
+        setModels(res.data.models || []);
+        if (res.data.models?.length > 0) setSelectedModel(res.data.models[0]);
+        setFinishModels(['None', ...(res.data.models || [])]);
         setSelectedFinishModel('None');
       } catch (err) {
-        console.error(err);
+        console.error('Failed to fetch models:', err);
       }
     };
     fetchModels();
   }, []);
 
+  // Fetch upscalers
   useEffect(() => {
     const fetchUpscalers = async () => {
       try {
-        const res = await fetch('/api/upscalers/');
-        if (!res.ok) throw new Error('Failed to fetch upscalers');
-        const data = await res.json();
-        setUpscalers(data.upscalers || []);
-        if (data.upscalers?.length > 0) setSelectedUpscaler(data.upscalers[0]);
+        const res = await client.get('/api/upscalers/');
+        setUpscalers(res.data.upscalers || []);
+        if (res.data.upscalers?.length > 0) setSelectedUpscaler(res.data.upscalers[0]);
       } catch (err) {
-        console.error(err);
+        console.error('Failed to fetch upscalers:', err);
       }
     };
     fetchUpscalers();
   }, []);
 
+  // Handle form submission
   const handleSubmit = async () => {
     if (!maskData || !prompt.trim() || !baseImage) {
-      alert('Please create a mask, enter a prompt, and ensure image is loaded');
+      alert('Please create a mask, enter a prompt, and ensure the image is loaded');
       return;
     }
 
     setIsGenerating(true);
     try {
+      // Convert mask and base image to File objects
       const maskBlob = await (await fetch(maskData)).blob();
       const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
 
-      const imgResponse = await fetch(baseImage.src);
-      const imgBlob = await imgResponse.blob();
+      const imgBlob = await (await fetch(baseImage.src)).blob();
       const imageFile = new File([imgBlob], 'image.png', { type: imgBlob.type });
 
       const formData = new FormData();
@@ -123,44 +124,40 @@ const EditorPage: React.FC<UploadPageProps> = ({ darkMode }) => {
       formData.append('mask', maskFile);
       formData.append('prompt', prompt);
       formData.append('model', selectedModel);
-
-      if (strength != null) formData.append('strength', strength.toString());
-      if (guidanceScale != null) formData.append('guidance_scale', guidanceScale.toString());
-      if (steps != null) formData.append('steps', steps.toString());
-      if (passes != null) formData.append('passes', passes.toString());
+      formData.append('strength', strength.toString());
+      formData.append('guidance_scale', guidanceScale.toString());
+      formData.append('steps', steps.toString());
+      formData.append('passes', passes.toString());
       if (seed.trim() !== '') formData.append('seed', seed);
       if (selectedFinishModel !== 'None') formData.append('finish_model', selectedFinishModel);
       if (negativePrompt.trim() !== '') formData.append('negative_prompt', negativePrompt);
+      if (enableUpscaler && selectedUpscaler) formData.append('upscaler_model', selectedUpscaler);
 
-      // Add upscaler and scale if enabled
-      if (enableUpscaler && selectedUpscaler) {
-        formData.append('upscaler_model', selectedUpscaler);
-      }
-
-      const token = localStorage.getItem("access");
-      const sessionId = localStorage.getItem("session_id");
-      const response = await fetch('/jobs', {
-        method: 'POST',
-        headers: {
-          ...(sessionId ? { "X-Session-ID": sessionId } : {}),
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-        body: formData,
+      const sessionId = localStorage.getItem('session_id');
+      const response = await client.post('/jobs', formData, {
+        headers: sessionId ? { 'X-Session-ID': sessionId } : {},
       });
 
-      if (!response.ok) throw new Error('Failed to create job');
-
-      const data = await response.json();
-      console.log('Job created:', data);
-
-      navigate(`/job/${data.job_id}`);
+      console.log('Job created:', response.data);
+      navigate(`/job/${response.data.job_id}`);
     } catch (err) {
-      console.error(err);
+      console.error('Error creating job:', err);
       alert('Error creating job');
     } finally {
       setIsGenerating(false);
     }
   };
+
+  if (!baseImage) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'dark:bg-gray-900' : 'bg-gray-50'}`}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className={darkMode ? 'text-gray-300' : 'text-gray-600'}>Loading image...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!baseImage) {
     return (

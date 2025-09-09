@@ -49,4 +49,16 @@ services:
       - ../.env
     depends_on:
       - redis
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Klonik2004
+      POSTGRES_DB: imgeditor
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
 
+volumes:
+   pgdata:

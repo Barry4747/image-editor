@@ -224,3 +224,14 @@ from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-session-id",
 ]
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'imgeditor',
+        'USER': 'postgres',
+        'PASSWORD': 'Klonik2004',
+        'HOST': 'localhost',  # change in prod
+        'PORT': '5432',
+    }
+}

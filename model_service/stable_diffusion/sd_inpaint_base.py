@@ -188,6 +188,7 @@ class UnifiedInpaintModel:
 
         try:
             self.pipeline.scheduler.set_timesteps(steps)
+            _, actual_steps = self.pipeline.get_timesteps(steps, strength, self.device)
             result = self.pipeline(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -197,7 +198,7 @@ class UnifiedInpaintModel:
                 guidance_scale=guidance_scale,
                 strength=strength,
                 generator=generator,
-                callback_on_step_end=callback(job_id=job_id, num_steps=len(self.pipeline.scheduler.timesteps)),
+                callback_on_step_end=callback(job_id=job_id, num_steps=actual_steps),
             )
             gen = result.images[0]
             gen, mask = self._ensure_size_align(gen, init, mask)

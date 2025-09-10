@@ -142,6 +142,8 @@ class SDXLInpaintModel:
 
         try:
             self.pipeline.scheduler.set_timesteps(steps)
+            _, actual_steps = self.pipeline.get_timesteps(steps, strength, self.device)
+            logger.info(f"steps {actual_steps}")
             result = self.pipeline(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
@@ -154,7 +156,7 @@ class SDXLInpaintModel:
                 width=width,
                 height=height,
                 output_type="pil",
-                callback_on_step_end=callback(job_id=job_id, num_steps=len(self.pipeline.scheduler.timesteps)),
+                callback_on_step_end=callback(job_id=job_id, num_steps=actual_steps),
             )
 
             gen = result.images[0]

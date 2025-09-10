@@ -176,7 +176,7 @@ class SDXLTextToImageModel:
                 guidance_scale=guidance_scale,
                 generator=generator,
                 output_type="pil",
-                callback_on_step_end=callback(job_id=job_id, num_steps=len(self.pipeline.scheduler.timesteps)),
+                callback_on_step_end=callback(job_id=job_id, num_steps=steps),
             )
 
             image: Image.Image = result.images[0]

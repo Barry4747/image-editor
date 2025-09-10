@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchGallery, deleteJob, updateJob } from "../api/gallery";
+import { fetchGallery, deleteJob } from "../api/gallery";
 import { useNavigate } from 'react-router-dom';
 
 interface Job {
@@ -13,8 +13,6 @@ export default function GalleryPage() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [editing, setEditing] = useState<Job | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDesc, setEditDesc] = useState("");
   const [viewing, setViewing] = useState<Job | null>(null); 
   const [loading, setLoading] = useState(true);
 
@@ -46,16 +44,6 @@ export default function GalleryPage() {
     }
   }
 
-  async function handleSaveEdit() {
-    if (!editing) return;
-    const updated = await updateJob(editing.id, {
-      title: editTitle,
-      description: editDesc,
-    });
-    setJobs(jobs.map((j) => (j.id === editing.id ? updated : j)));
-    setEditing(null);
-  }
-
   useEffect(() => {
     loadGallery();
   }, []);
@@ -81,17 +69,43 @@ export default function GalleryPage() {
               key={job.id}
               className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transform transition duration-300 hover:shadow-xl hover:scale-102 group"
             >
-              <div className="relative cursor-zoom-in" onClick={() => setViewing(job)}>
+             <div
+              className="relative cursor-zoom-in aspect-square"
+              onClick={() => setViewing(job)}
+            >
+              {job.output ? (
                 <img
                   src={job.output}
                   alt={job.title || "Generated image"}
-                  className="w-full h-auto object-contain aspect-square"
+                  className="w-full h-auto object-contain"
                   loading="lazy"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.parentElement?.setAttribute('data-failed', 'true');
+                  }}
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <span className="text-white font-medium text-sm">View Full</span>
+              ) : null}
+
+              {(!job.output || job.output === "" || job.output === "/media/") && (
+                <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-500 text-sm">
+                  No picture available
                 </div>
+              )}
+
+              <div
+                className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-500 text-sm transition-opacity pointer-events-none"
+                style={{
+                  opacity: job.output && !job.output.startsWith('/media/') && document.querySelector('[data-failed="true"]') ? 1 : 0,
+                }}
+              >
+                No picture available
               </div>
+
+              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+                <span className="text-white font-medium text-sm">View Full</span>
+              </div>
+            </div>
 
               <div className="p-3">
                 <h3 className="font-semibold text-gray-800 dark:text-white truncate">

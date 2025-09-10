@@ -197,10 +197,10 @@ def handle_output_and_upscale(job, output_url, progress_step=0.99):
         "done",
         job.session_id,
         preview_url=upscaled_output_url,
-        progress=100,
+        progress=1,
         job_data=serializer.data
     )
-    send_progress(job.session_id, "done", job_id=job.id, progress=100)
+    send_progress(job.session_id, "done", job_id=job.id, progress=1)
     logger.info(f"Processing completed for job {job.id}")
 
 
@@ -243,7 +243,7 @@ def process_job(self, job_id):
             if not output_url:
                 raise ValueError("Missing output_url in response")
 
-            handle_output_and_upscale(job, output_url, progress_step=50)
+            handle_output_and_upscale(job, output_url, progress_step=0.99)
 
         finally:
             for f in handles:
@@ -300,7 +300,7 @@ def generate_image(self, job_id):
         if not output_url:
             raise ValueError("Missing output_url in response")
 
-        handle_output_and_upscale(job, output_url, progress_step=80)
+        handle_output_and_upscale(job, output_url, progress_step=0.99)
 
     except requests.RequestException as e:
         logger.error(f"API error: {str(e)}")

@@ -118,7 +118,7 @@ def get_upscalers(request):
 @api_view(['POST'])
 def get_masks(request):
     user = request.user if request.user.is_authenticated else None
-    session_id = request.headers.get("X-Session-ID") if not user else ""
+    session_id = request.headers.get("X-Session-ID") 
     if not session_id:
         return Response({"error": "Session ID is required."}, status=400)
 

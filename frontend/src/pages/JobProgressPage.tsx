@@ -56,7 +56,7 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
 
     const connect = () => {
       try {
-        ws = new WebSocket(`ws://localhost:8000/ws/progress/${sessionId}/`);
+        ws = new WebSocket(`ws://${process.env.REACT_APP_WS_URL}/ws/progress/${sessionId}/`);
         
         ws.onopen = () => {
           console.log('WebSocket connected');
@@ -77,13 +77,13 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
             case 'progress':
               setStatus('processing');
               if (data.progress !== undefined) setProgress(data.progress * 100);
-              if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
+              if (data.preview_url) setOutputUrl(`http://${process.env.REACT_APP_API_URL}` + data.preview_url);
               break;
             
             case 'upscaling':
               setStatus('upscaling');
               if (data.progress !== undefined) setProgress(data.progress * 100);
-              if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
+              if (data.preview_url) setOutputUrl(`http://${process.env.REACT_APP_API_URL}` + data.preview_url);
               break;
               
             case 'step-end':
@@ -103,7 +103,7 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
               setStatus('done');
               setProgress(100);
               setStepProgress(0);
-              if (data.preview_url) setOutputUrl("http://localhost:8000" + data.preview_url);
+              if (data.preview_url) setOutputUrl(`http://${process.env.REACT_APP_API_URL}` + data.preview_url);
               
               // Extract job data from the response
               if (data.job_data) {
@@ -124,8 +124,8 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
                 if (data.job_data.upscale_model) jobInfo.upscale_model = data.job_data.upscale_model;
                 
                 // Add image and mask URLs if they exist
-                if (data.job_data.image) jobInfo.image = "http://localhost:8000" + data.job_data.image;
-                if (data.job_data.mask) jobInfo.mask = "http://localhost:8000" + data.job_data.mask;
+                if (data.job_data.image) jobInfo.image = `http://${process.env.REACT_APP_API_URL}` + data.job_data.image;
+                if (data.job_data.mask) jobInfo.mask = `http://${process.env.REACT_APP_API_URL}` + data.job_data.mask;
                 
                 setJobData(jobInfo);
               }

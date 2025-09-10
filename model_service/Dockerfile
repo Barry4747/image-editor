@@ -8,16 +8,26 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-# upgrade pip i instalacja torch z CUDA
+# upgrade pip
 RUN pip3 install --upgrade pip
-RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# instalacja reszty pakietów z requirements.txt bez torch i torchvision itp.
-RUN grep -vE "torch|torchvision|torchaudio" requirements.txt > requirements_no_torch.txt
-RUN pip3 install -r requirements_no_torch.txt
+# Instalacja narzędzi systemowych
+RUN apt-get update && apt-get install -y git libgl1 libglib2.0-0
+
+# Zainstaluj KOMPAKTYBILNE wersje torch i torchvision
+# Te wersje zawierają moduł 'functional_tensor', którego oczekuje basicsr
+RUN pip3 install torch==2.0.1 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/cu118
+
+# Stwórz KOPIĘ requirements.txt, ale BEZ linii zawierających torch/torchvision/torchaudio
+# To zapobiegnie ich ponownej instalacji i nadpisaniu kompatybilnych wersji
+RUN grep -vE "torch|torchvision|torchaudio" requirements.txt > requirements_filtered.txt
+
+# Zainstaluj WSZYSTKIE POZOSTAŁE pakiety z przefiltrowanego pliku
+RUN pip3 install -r requirements_filtered.txt --extra-index-url https://download.pytorch.org/whl/cu118
+
+RUN sed -i "s/from torchvision\.transforms\.functional_tensor import rgb_to_grayscale/try:\n    from torchvision.transforms.functional_tensor import rgb_to_grayscale\nexcept ImportError:\n    from torchvision.transforms.functional import rgb_to_grayscale/" /usr/local/lib/python3.10/dist-packages/basicsr/data/degradations.py
 
 COPY . .
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
-
 EXPOSE 8001

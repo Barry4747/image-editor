@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { Stage, Layer, Image as KonvaImage, Line, Rect } from "react-konva";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { throttle } from "lodash";
+import client from '../api/axiosClient';
 import './styles/MaskingCanvas.css'
 
 interface MaskingCanvasProps {
@@ -100,7 +101,7 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
   const preprocessMask = useCallback(async (mask: AIMask): Promise<AIMask> => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.src = mask.url;
+    img.src = `http://${process.env.REACT_APP_API_URL}${mask.url}`;
     await new Promise((res, rej) => {
       img.onload = res;
       img.onerror = rej;
@@ -334,31 +335,35 @@ const MaskingCanvas = ({ baseImage, onMaskExport, darkMode = false }: MaskingCan
       const formData = new FormData();
       formData.append("image", blob, "image.png");
       formData.append("model", "sam-vit-h");
+      
       const sessionId = localStorage.getItem("session_id");
-      const res = await fetch("/api/get_masks", {
-        method: "POST",
-        headers: {...(sessionId ? { "X-Session-ID": sessionId } : {}),},
-        body: formData,
-      });
-      if (!res.ok) {
-        console.error(await res.text());
-        setAiProcessing(false);
-        return;
-      }
+      const headers = sessionId ? { 'X-Session-ID': sessionId } : {};
 
-      const { job_id } = await res.json();
+      const res = await client.post('/api/get_masks', formData, { headers });
+      
+      const { job_id } = res.data;
+      
       const poll = async (jobId: number): Promise<string[]> => {
-        const statusRes = await fetch(`/api/get_masks_status/${jobId}`);
-        const data = await statusRes.json();
-        if (data.status === "done") return data.masks || [];
-        await new Promise((r) => setTimeout(r, 2000));
-        return poll(jobId);
+        try {
+          const statusRes = await client.get(`/api/get_masks_status/${jobId}`);
+          const data = statusRes.data;
+          
+          if (data.status === "done") return data.masks || [];
+          if (data.status === "error") throw new Error(data.error || "Mask generation failed");
+          
+          await new Promise((r) => setTimeout(r, 2000));
+          return poll(jobId);
+        } catch (err) {
+          console.error("Error polling mask status:", err);
+          throw err;
+        }
       };
 
       const maskUrls = await poll(job_id);
       setAiMasks(maskUrls.map((url) => ({ url, image: null })));
     } catch (err) {
-      console.error(err);
+      console.error("AI Mask error:", err);
+      alert('Error generating AI masks');
     } finally {
       setAiProcessing(false);
     }

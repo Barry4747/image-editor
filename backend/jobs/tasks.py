@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "media")
+BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "/data/media")
 MEDIA_ROOT = os.path.join(BASE_MEDIA_ROOT, "outputs")
 MEDIA_URL = "/media/"
 MASKS_DIR = os.path.join(MEDIA_ROOT, "masks")
@@ -61,8 +61,18 @@ def format_output_url(file_path):
     if not file_path:
         return None
 
-    if file_path.startswith(('http://', 'https://', '/')):
+    if file_path.startswith(('http://', 'https://')):
         return file_path
+
+    if file_path.startswith('/'):
+        normalized_path = os.path.normpath(file_path).replace('\\', '/')
+        media_root = os.path.normpath(settings.MEDIA_ROOT).replace('\\', '/')
+        
+        if normalized_path.startswith(media_root):
+            relative_path = normalized_path[len(media_root):].lstrip('/')
+            return urljoin(settings.MEDIA_URL, relative_path)
+        else:
+            return file_path
 
     normalized_path = os.path.normpath(file_path).replace('\\', '/')
     media_root = os.path.normpath(settings.MEDIA_ROOT).replace('\\', '/')
@@ -152,6 +162,7 @@ def handle_output_and_upscale(job, output_url, progress_step=0.99):
     """Save output, optionally upscale, and update job."""
     formatted_url = format_output_url(output_url)
     relative_path = formatted_url.replace(settings.MEDIA_URL, "", 1).lstrip("/")
+    logger.info(f"relative: {relative_path}")
     job.output.name = relative_path
     job.save(update_fields=["output"])
 

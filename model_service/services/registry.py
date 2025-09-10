@@ -32,6 +32,12 @@ CLASS_MAP = {
     "SDTextToImageModelWrapper": SDTextToImageModel,
     "SDXLTextToImageModelWrapper": SDXLTextToImageModel,
 }
+import dotenv
+import os
+import logging
+
+
+dotenv.load_dotenv()
 
 
 class ModelManager:
@@ -40,7 +46,10 @@ class ModelManager:
     _model_map: Dict[str, Any] = {}
 
     @classmethod
-    def load_config(cls, config_path: str = "models.yaml"):
+    def load_config(cls, config_path: str = None):
+        if not config_path:
+            config_path = os.getenv("MODELS_YAML_PATH", "models.yaml")
+        print(f"Trying to load models config from: {config_path}")
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Config file {config_path} not found")
 

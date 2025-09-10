@@ -33,7 +33,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
   useEffect(() => {
     const fetchModels = async () => {
       try {
-        const res = await fetch('/api/t2i-models/');
+        const res = await fetch(`http://${process.env.REACT_APP_API_URL}/api/t2i-models/`);
         if (!res.ok) throw new Error('Failed to fetch models');
         const data = await res.json();
         setModels(data.models || []);
@@ -59,7 +59,7 @@ const TextToImagePage: React.FC<UploadPageProps> = ({ darkMode }) => {
   useEffect(() => {
     const fetchUpscalers = async () => {
       try {
-        const res = await fetch('/api/upscalers/');
+        const res = await fetch(`http://${process.env.REACT_APP_API_URL}/api/upscalers/`);
         if (!res.ok) throw new Error('Failed to fetch upscalers');
         const data = await res.json();
         setUpscalers(data.upscalers || []);

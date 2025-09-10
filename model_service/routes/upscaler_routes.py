@@ -10,7 +10,7 @@ from services.editing_services import convert_system_path_to_url
 
 load_dotenv()
 
-BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "media")
+BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "/data/media")
 MEDIA_ROOT = os.path.join(BASE_MEDIA_ROOT, "upscaled")
 MEDIA_URL = "/media/"
 

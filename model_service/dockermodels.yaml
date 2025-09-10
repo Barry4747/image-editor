@@ -1,50 +1,51 @@
 # for every type of configuration there are obligatory info to be passed. It is: class (which is the name of the class that is suitable for the model (must be in the CLASS_MAP)), 
 # path, and it is suitable to add required_vram,  
+# this file is meant for docker. Paths must be relative. You can change the mnt in infra/docker-compose.yml
 
 models:
   sd1.5-controlnet-canny:
     class: ControlNetModelWrapper
-    path: C:/Users/Bartek/AImodels/ImageGeneration/Whole/stable-diffusion-v1-5
-    controlnet_path: C:/Users/Bartek/AImodels/Controlnet/sd-controlnet-canny
-    vae: C:/Users/Bartek/AImodels/ImageGeneration/Whole/stable-diffusion-v1-5/vae
+    path: /models/ImageGeneration/Whole/stable-diffusion-v1-5
+    controlnet_path: /models/Controlnet/sd-controlnet-canny
+    vae: /models/ImageGeneration/Whole/stable-diffusion-v1-5/vae
     required_vram: 6
 
   realistic-vision-v6.0-hyper-vae:
     class: UnifiedInpaintModelWrapper
-    path: C:\Users\Bartek\AImodels\VAE\SD-1.5-Hyper-Inpainting-VAE\diffusion_pytorch_model.safetensors
+    path: /models/VAE/SD-1.5-Hyper-Inpainting-VAE/diffusion_pytorch_model.safetensors
     vae: null
     required_vram: 8
 
   cyberrealistic-inpaint-v8.0:
     class: UnifiedInpaintModelWrapper
-    path: C:\Users\Bartek\AImodels\VAE\cyberrealistic\cyberrealistic_v80Inpainting.safetensors
+    path: /models/VAE/cyberrealistic/cyberrealistic_v80Inpainting.safetensors
     vae: null
     required_vram: 8
 
   lustify-sdxl:
     class: SDXLInpaintModelWrapper
-    path: C:\Users\Bartek\AImodels\VAE\lustify\lustifySDXLNSFW_oltINPAINTING.safetensors
-    vae: C:\Users\Bartek\AImodels\VAE\sdxl
+    path: /models/VAE/lustify/lustifySDXLNSFW_oltINPAINTING.safetensors
+    vae: /models/VAE/sdxl
     required_vram: 10
 
   illustrious-pony:
     class: SDXLInpaintModelWrapper
-    path: C:\Users\Bartek\AImodels\VAE\damn\damnIllustriousPony_v50IllustriousNoobai.safetensors
-    vae: C:\Users\Bartek\AImodels\VAE\sdxl
+    path: /models/VAE/damn/damnIllustriousPony_v50IllustriousNoobai.safetensors
+    vae: /models/VAE/sdxl
     required_vram: 10
     class_t2i: SDXLTextToImageModelWrapper
 
   juggernaut-xl:
     class: SDXLInpaintModelWrapper
-    path: C:\Users\Bartek\AImodels\ImageGeneration\Checkpoints\juggernautXL_ragnarokBy.safetensors
-    vae: C:\Users\Bartek\AImodels\VAE\sdxl
+    path: /models/ImageGeneration/Checkpoints/juggernautXL_ragnarokBy.safetensors
+    vae: /models/VAE/sdxl
     required_vram: 10
     class_t2i: SDXLTextToImageModelWrapper
 
   epicrealism-xl:
     class: SDXLInpaintModelWrapper
-    path: C:\Users\Bartek\AImodels\ImageGeneration\Checkpoints\epicrealismXL_vxviiCrystalclear.safetensors
-    vae: C:\Users\Bartek\AImodels\VAE\sdxl
+    path: /models/ImageGeneration/Checkpoints/epicrealismXL_vxviiCrystalclear.safetensors
+    vae: /models/VAE/sdxl
     required_vram: 10
     class_t2i: SDXLTextToImageModelWrapper
 
@@ -52,13 +53,13 @@ auto_segmantation:
   sam-vit-h:
     class: SamModelWrapper
     type: vit_h
-    path: C:/Users/Bartek/AImodels/SAM/sam_vit_h_4b8939.pth
+    path: /models/SAM/sam_vit_h_4b8939.pth
     required_vram: 8
 
 upscalers:
   realesrgan-x4plus:
     class: RealESRGANUpscalerWrapper
-    path: C:\Users\Bartek\AImodels\Upscalers\RealESRGAN_x4plus.pth
+    path: /models/Upscalers/RealESRGAN_x4plus.pth
     num_block: 23
     num_feat: 64
     num_grow_ch: 32
@@ -66,7 +67,7 @@ upscalers:
 
   realesrgan-x4plus_anime_6B:
     class: RealESRGANUpscalerWrapper
-    path: C:\Users\Bartek\AImodels\Upscalers\RealESRGAN_x4plus_anime_6B.pth
+    path: /models/Upscalers/RealESRGAN_x4plus_anime_6B.pth
     num_block: 6
     num_feat: 64
     num_grow_ch: 32

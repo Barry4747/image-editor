@@ -2,7 +2,10 @@ import os
 import requests
 import threading
 
-DJANGO_API_URL = os.getenv("DJANGO_API_URL", "http://localhost:8000")
+BACKEND_HOST = os.getenv("BACKEND_HOST", "localhost")
+BACKEND_PORT = os.getenv("BACKEND_PORT", "8000")
+
+DJANGO_API_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}"
 
 session = requests.Session()
 

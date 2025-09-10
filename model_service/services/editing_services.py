@@ -11,14 +11,17 @@ logger = logging.getLogger("my_app")
 
 load_dotenv()
 
-BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "media")
+BASE_MEDIA_ROOT = os.getenv("MEDIA_ROOT", "/data/media")
 MEDIA_ROOT = os.path.join(BASE_MEDIA_ROOT, "outputs")
 MEDIA_URL = "/media/"
 
 import requests
 import os
 
-DJANGO_API_URL = os.getenv("DJANGO_API_URL", "http://localhost:8000")
+BACKEND_HOST = os.getenv("BACKEND_HOST", "localhost")
+BACKEND_PORT = os.getenv("BACKEND_PORT", "8000")
+
+DJANGO_API_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}"
 
 models_to_blur = [
     "lustify-sdxl",

@@ -6,7 +6,7 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def startup_event():
-    ModelManager.load_config("models.yaml")
+    ModelManager.load_config()
 
 @app.get("/health")
 async def health_check():

@@ -15,7 +15,6 @@ def save_image(file, session_id):
 
     try:
         with open(file_path, "wb") as f:
-            # Spróbuj zapisać całe naraz
             f.write(file.read())
     except Exception as e:
         print(f"Error while saving file: {e}")

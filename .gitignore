@@ -4,5 +4,11 @@ run.bat
 media
 test.py
 db.sqlite3
-lustify_sdxl.py
+run.bat
+specifics
 models.yaml
+dockermodels.yaml
+docker-compose.yml
+.env
+.env.docker
+settings.py

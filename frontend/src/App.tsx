@@ -36,7 +36,7 @@ const AppContent = () => {
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
-  const hideHeaderFooter = location.pathname.startsWith('/job/');
+  const hideHeaderFooter = false;
 
   return (
     <div

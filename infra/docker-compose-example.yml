@@ -1,3 +1,6 @@
+# Use this file to define your services and their configurations.
+# For more information, see https://docs.docker.com/compose/
+
 services:
   backend:
     build: ../backend
@@ -20,7 +23,7 @@ services:
     volumes:
       - ../data/media:/data/media
       - ../model_service:/app
-      - C:/Users/Bartek/AImodels:/models
+      - <path to your models>:/models #important
     env_file:
       - ../.env.docker
     deploy:
@@ -63,7 +66,7 @@ services:
     image: postgres:15
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Klonik2004
+      POSTGRES_PASSWORD: password
       POSTGRES_DB: imgeditor
     ports:
       - "5432:5432"

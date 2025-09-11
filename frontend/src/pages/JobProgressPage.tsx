@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import client from '../api/axiosClient';
 
 interface ProgressEvent {
   type: string;
@@ -8,6 +9,8 @@ interface ProgressEvent {
   iteration?: number;
   preview_url?: string;
   progress?: number;
+  error?: string;
+  error_stage?: string;
   [key: string]: any;
 }
 
@@ -33,20 +36,87 @@ interface JobProgressPageProps {
 
 export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
   const { jobId } = useParams();
+  const navigate = useNavigate();
   const [progress, setProgress] = useState<number>(0);
   const [stepProgress, setStepProgress] = useState<number>(0);
   const [status, setStatus] = useState<'created' | 'processing' | 'upscaling' | 'done' | 'failed'>('created');
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorStage, setErrorStage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [showInfo, setShowInfo] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [showMask, setShowMask] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
-  // Empty handler for failed event
-  const handleFailed = () => {
-    // Implementation for failed event will go here
+  // Function to handle regeneration/retry
+  const handleRegenerate = async () => {
+    setIsRegenerating(true);
+    try {
+      if (!jobData) {
+        alert('Original job data not available for regeneration.');
+        return;
+      }
+      
+      const jobDetails = jobData;
+      
+      // Prepare form data for regeneration
+      const formData = new FormData();
+      
+      // Add common parameters
+      formData.append('prompt', jobDetails.prompt);
+      formData.append('model', jobDetails.model);
+      
+      // Add optional parameters if they exist
+      if (jobDetails.guidance_scale) formData.append('guidance_scale', jobDetails.guidance_scale.toString());
+      if (jobDetails.steps) formData.append('steps', jobDetails.steps.toString());
+      if (jobDetails.seed) formData.append('seed', jobDetails.seed);
+      if (jobDetails.negative_prompt) formData.append('negative_prompt', jobDetails.negative_prompt);
+      
+      // Handle different job types (with or without image/mask)
+      if (jobDetails.image) {
+        console.log('Fetching image for regeneration:', jobDetails.image);
+        // This is an img2img or inpainting job
+        const imageResponse = await fetch(jobDetails.image);
+        const imageBlob = await imageResponse.blob();
+        const imageFile = new File([imageBlob], 'image.png', { type: 'image/png' });
+        formData.append('image', imageFile);
+        
+        if (jobDetails.mask) {
+          // This is an inpainting job
+          const maskResponse = await fetch(jobDetails.mask);
+          const maskBlob = await maskResponse.blob();
+          const maskFile = new File([maskBlob], 'mask.png', { type: 'image/png' });
+          formData.append('mask', maskFile);
+          
+          // Add inpainting-specific parameters
+          if (jobDetails.strength) formData.append('strength', jobDetails.strength.toString());
+          if (jobDetails.passes) formData.append('passes', jobDetails.passes.toString());
+        } else {
+          // This is an img2img job
+          if (jobDetails.strength) formData.append('strength', jobDetails.strength.toString());
+        }
+      }
+      
+      // Add upscaler if enabled
+      if (jobDetails.upscale_model && jobDetails.upscale_model !== 'None') {
+        formData.append('upscaler_model', jobDetails.upscale_model);
+      }
+      const sessionId = localStorage.getItem('session_id');
+      // Submit the new job
+      const createResponse = await client.post('/jobs', formData, {
+        headers: sessionId ? { 'X-Session-ID': sessionId } : {},
+      });
+      
+      // Navigate to the new job page
+      navigate(`/job/${createResponse.data.job_id}`);
+    } catch (err) {
+      console.error('Failed to regenerate job:', err);
+      alert('Error regenerating job. Please try again.');
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   useEffect(() => {
@@ -61,6 +131,7 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
         ws.onopen = () => {
           console.log('WebSocket connected');
           setError(null);
+          setErrorStage(null);
         };
 
         ws.onmessage = (e) => {
@@ -72,37 +143,44 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
               setStatus('created');
               setProgress(0);
               setStepProgress(0);
+              setError(null);
+              setErrorStage(null);
               break;
 
             case 'progress':
               setStatus('processing');
               if (data.progress !== undefined) setProgress(data.progress * 100);
               if (data.preview_url) setOutputUrl(`http://${process.env.REACT_APP_API_URL}` + data.preview_url);
+              setError(null);
+              setErrorStage(null);
               break;
             
             case 'upscaling':
               setStatus('upscaling');
               if (data.progress !== undefined) setProgress(data.progress * 100);
               if (data.preview_url) setOutputUrl(`http://${process.env.REACT_APP_API_URL}` + data.preview_url);
+              setError(null);
+              setErrorStage(null);
               break;
               
             case 'step-end':
               if (data.progress !== undefined) {
                 setStepProgress(data.progress * 100);
-                console.log(stepProgress)
               }
-              // Reset step progress after a short delay
               break;
               
             case 'failed':
               setStatus('failed');
-              handleFailed();
+              setError(data.error || 'An unknown error occurred');
+              setErrorStage(data.error_stage || 'unknown stage');
               break;
               
             case 'done':
               setStatus('done');
               setProgress(100);
               setStepProgress(0);
+              setError(null);
+              setErrorStage(null);
               if (data.preview_url) setOutputUrl(`http://${process.env.REACT_APP_API_URL}` + data.preview_url);
               
               // Extract job data from the response
@@ -154,10 +232,12 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
         ws.onerror = (err) => {
           console.error('WebSocket error:', err);
           setError('Connection error. Retrying...');
+          setErrorStage('WebSocket connection');
         };
       } catch (err) {
         console.error('Failed to create WebSocket:', err);
         setError('Failed to establish connection');
+        setErrorStage('WebSocket initialization');
       }
     };
 
@@ -282,10 +362,42 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
                   </p>
                 </div>
                 
+                {(status === 'done' || status === 'failed') && (
+                  <button
+                    onClick={handleRegenerate}
+                    disabled={isRegenerating}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center ${
+                      darkMode 
+                        ? isRegenerating 
+                          ? 'bg-gray-700 text-gray-400' 
+                          : 'bg-blue-900/30 hover:bg-blue-800/50 text-blue-400'
+                        : isRegenerating 
+                          ? 'bg-gray-200 text-gray-500' 
+                          : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                    }`}
+                  >
+                    {isRegenerating ? (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Regenerating...
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Regenerate
+                      </>
+                    )}
+                  </button>
+                )}
+                
                 {status === 'done' && jobData && (
                   <button
                     onClick={() => setShowInfo(!showInfo)}
-                    className={`p-2 rounded-lg transition-colors duration-200 ${
+                    className={`p-2 rounded-lg transition-colors duration-200 ml-2 ${
                       darkMode 
                         ? 'hover:bg-gray-700 text-blue-400' 
                         : 'hover:bg-gray-100 text-blue-600'
@@ -360,24 +472,23 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
                 )}
 
                 {(stepProgress > 0 && status !== 'done' ) && (
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
-                            Step Progress
-                          </span>
-                          <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
-                            {Math.round(stepProgress)}%
-                          </span>
-                        </div>
-                        <div className={`h-2 rounded-full overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                          <div
-                            className="h-full bg-gradient-to-r from-green-500 to-blue-500 transition-all duration-300 ease-out"
-                            style={{ width: `${stepProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
+                  <div className="mt-4">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
+                        Step Progress
+                      </span>
+                      <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>
+                        {Math.round(stepProgress)}%
+                      </span>
+                    </div>
+                    <div className={`h-2 rounded-full overflow-hidden ${darkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                      <div
+                        className="h-full bg-gradient-to-r from-green-500 to-blue-500 transition-all duration-300 ease-out"
+                        style={{ width: `${stepProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {status === 'done' && (
                   <div className="flex items-center p-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg text-sm">
@@ -389,11 +500,28 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
                 )}
                 
                 {status === 'failed' && (
-                  <div className="flex items-center p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Image generation failed. Please try again.
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">
+                    <div className="flex items-start">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <h3 className="font-medium">Image generation failed</h3>
+                        {error && (
+                          <p className="mt-1">
+                            <span className="font-medium">Error:</span> {error}
+                          </p>
+                        )}
+                        {errorStage && (
+                          <p className="mt-1">
+                            <span className="font-medium">Stage:</span> {errorStage}
+                          </p>
+                        )}
+                        <p className="mt-2">
+                          You can try to regenerate the image using the button above.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -530,7 +658,7 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
             )}
 
             {/* Error State */}
-            {error && (
+            {error && status !== 'failed' && (
               <div className="mb-8">
                 <div className="flex items-center p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -539,6 +667,11 @@ export default function JobProgressPage({ darkMode }: JobProgressPageProps) {
                   <div>
                     <h3 className="font-medium">Connection Issue</h3>
                     <p className="text-sm mt-1">{error}</p>
+                    {errorStage && (
+                      <p className="text-sm mt-1">
+                        <span className="font-medium">Stage:</span> {errorStage}
+                      </p>
+                    )}
                     {retryCount < 5 && (
                       <p className="text-sm mt-1">
                         Attempt {retryCount + 1} of 5 - reconnecting automatically...

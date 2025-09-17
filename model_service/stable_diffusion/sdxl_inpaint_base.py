@@ -60,7 +60,7 @@ class SDXLInpaintModel:
     ):
         try:
             self.pipeline = StableDiffusionXLInpaintPipeline.from_single_file(
-                model_path, torch_dtype=torch_dtype, safety_checker=None
+                model_path, torch_dtype=torch_dtype
             )
 
             if vae_path:

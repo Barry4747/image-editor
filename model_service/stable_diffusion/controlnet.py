@@ -73,14 +73,12 @@ class ControlNet:
                     model_path,
                     controlnet=controlnet,
                     torch_dtype=torch_dtype,
-                    safety_checker=None,
                     feature_extractor=None,
                 )
             else:
                 self.pipeline = StableDiffusionInpaintPipeline.from_pretrained(
                     model_path,
                     torch_dtype=torch_dtype,
-                    safety_checker=None,
                     feature_extractor=None,
                 )
 

@@ -99,7 +99,6 @@ class UnifiedInpaintModel:
             self.pipeline = StableDiffusionInpaintPipeline.from_single_file(
                 model_path,
                 torch_dtype=torch_dtype,
-                safety_checker=None,
                 feature_extractor=None,
             )
 

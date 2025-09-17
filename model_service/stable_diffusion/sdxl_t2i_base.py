@@ -68,7 +68,6 @@ class SDXLTextToImageModel:
             self.pipeline = StableDiffusionXLPipeline.from_single_file(
                 model_path,
                 torch_dtype=torch_dtype,
-                safety_checker=None,
                 use_safetensors=True,
             )
 
